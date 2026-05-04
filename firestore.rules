@@ -1,0 +1,201 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // HELPER FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Đã đăng nhập
+    function authed() {
+      return request.auth != null;
+    }
+
+    // Đã đăng nhập VÀ là chủ sở hữu của uid
+    function isMe(uid) {
+      return authed() && request.auth.uid == uid;
+    }
+
+    // userId KHÔNG được thay đổi sau khi tạo document
+    // BUG GỐC: rules cũ thiếu check này → user có thể update userId sang người khác
+    function userIdLocked() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+    // Validate dữ liệu event trước khi ghi vào expense_events
+    function validEvent() {
+      let d = request.resource.data;
+
+      // 1. Các field bắt buộc phải tồn tại
+      let hasRequired = d.keys().hasAll(['userId', 'eventType', 'createdAt', 'data']);
+
+      // 2. Kiểu dữ liệu cơ bản
+      let validTypes = d.userId is string
+        && d.eventType is string
+        && d.createdAt is string
+        && d.data is map;
+
+      // 3. eventType phải nằm trong danh sách cho phép (whitelist)
+      //    Ngăn client inject event type giả
+      let validEventType = d.eventType in [
+        'EXPENSE_ADDED',   'EXPENSE_UPDATED',  'EXPENSE_DELETED',
+        'INCOME_ADDED',    'INCOME_CREATED',   'INCOME_DELETED',
+        'BUDGET_SET',
+        'GOAL_ADDED',      'GOAL_CREATED',     'GOAL_UPDATED',     'GOAL_DELETED',
+        'GOAL_DEPOSIT_ADDED', 'GOAL_DEPOSIT_EDITED', 'GOAL_DEPOSIT_DELETED',
+        'DEBT_CREATED',    'DEBT_UPDATED',     'DEBT_DELETED',
+        'DEBT_PAYMENT_ADDED', 'DEBT_PAYMENT_DELETED',
+        'TEMPLATE_CREATED', 'TEMPLATE_DELETED',
+        'SAVINGS_TARGET_SET',      'SAVINGS_DEPOSIT',           'SAVINGS_DEPOSIT_DELETED',
+        'SAVINGS_ALLOCATED',       'SAVINGS_ALLOCATION_DELETED',
+        'SAVINGS_WITHDRAWN',       'SAVINGS_WITHDRAWAL_DELETED'
+      ];
+
+      // 4. Nếu event.data chứa amount → phải là số dương, không vượt quá 1 tỷ
+      //    Ngăn: amount âm, amount = 0, amount overflow gây lỗi analytics
+      let validAmount = !('amount' in d.data)
+        || (d.data.amount is number
+            && d.data.amount > 0
+            && d.data.amount < 1000000000);
+
+      // 5. Tối đa 20 fields trong data object (chống payload bomb)
+      let validSize = d.data.size() <= 20;
+
+      return hasRequired && validTypes && validEventType && validAmount && validSize;
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // EXPENSE_EVENTS — append-only event log (event-sourcing)
+    // ═══════════════════════════════════════════════════════════════════════
+    //
+    // ⚠️ FIX 1: update + delete → if false
+    //    Client KHÔNG BAO GIỜ cần sửa/xóa event đã ghi.
+    //    "Xóa expense" = append thêm EXPENSE_DELETED event, không phải xóa doc.
+    //    Rules cũ cho phép update/delete là thừa và nguy hiểm.
+    //
+    // ⚠️ FIX 2: create thêm validEvent() để validate payload
+    //    Rules cũ chỉ check userId, không validate eventType, amount, v.v.
+    //
+    match /expense_events/{docId} {
+      allow get:    if isMe(resource.data.userId);
+      allow list:   if isMe(resource.data.userId);
+      allow create: if isMe(request.resource.data.userId) && validEvent();
+      allow update: if false;  // Events bất biến (immutable)
+      allow delete: if false;  // Events bất biến (immutable)
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LEGACY V4 COLLECTIONS — chỉ dùng khi import dữ liệu cũ
+    // ═══════════════════════════════════════════════════════════════════════
+    //
+    // ⚠️ FIX 3: thêm userIdLocked() vào update
+    //    Rules cũ thiếu check này → user có thể update userId sang người khác.
+    //    Áp dụng cho TẤT CẢ collections có update rule dùng resource.data.userId.
+    //
+    match /expenses/{docId} {
+      allow get:    if isMe(resource.data.userId);
+      allow list:   if isMe(resource.data.userId);
+      allow create: if isMe(request.resource.data.userId);
+      allow update: if isMe(resource.data.userId) && userIdLocked();
+      allow delete: if isMe(resource.data.userId);
+    }
+
+    match /incomes/{docId} {
+      allow get:    if isMe(resource.data.userId);
+      allow list:   if isMe(resource.data.userId);
+      allow create: if isMe(request.resource.data.userId);
+      allow update: if isMe(resource.data.userId) && userIdLocked();
+      allow delete: if isMe(resource.data.userId);
+    }
+
+    match /debts/{docId} {
+      allow get:    if isMe(resource.data.userId);
+      allow list:   if isMe(resource.data.userId);
+      allow create: if isMe(request.resource.data.userId);
+      allow update: if isMe(resource.data.userId) && userIdLocked();
+      allow delete: if isMe(resource.data.userId);
+    }
+
+    match /goals/{docId} {
+      allow get:    if isMe(resource.data.userId);
+      allow list:   if isMe(resource.data.userId);
+      allow create: if isMe(request.resource.data.userId);
+      allow update: if isMe(resource.data.userId) && userIdLocked();
+      allow delete: if isMe(resource.data.userId);
+    }
+
+    match /templates/{docId} {
+      allow get:    if isMe(resource.data.userId);
+      allow list:   if isMe(resource.data.userId);
+      allow create: if isMe(request.resource.data.userId);
+      allow update: if isMe(resource.data.userId) && userIdLocked();
+      allow delete: if isMe(resource.data.userId);
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BUDGETS — docId pattern: "{userId}_{month}"
+    // ═══════════════════════════════════════════════════════════════════════
+    match /budgets/{docId} {
+      allow read, write: if authed() && docId.matches(request.auth.uid + '_.*');
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // USER PROFILE
+    // ═══════════════════════════════════════════════════════════════════════
+    match /users/{userId} {
+      allow read, write: if isMe(userId);
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // USER SETTINGS + SUBCOLLECTIONS
+    // ═══════════════════════════════════════════════════════════════════════
+    match /user_settings/{userId} {
+      allow read, write: if isMe(userId);
+
+      // FCM tokens — mỗi device một doc, client quản lý token của chính mình
+      match /fcm_tokens/{deviceId} {
+        allow read, write: if isMe(userId);
+      }
+
+      // Alert log — Cloud Function ghi (admin SDK bypass rules), client chỉ đọc
+      match /alert_log/{alertKey} {
+        allow read:  if isMe(userId);
+        allow write: if false;  // Cloud Function only
+      }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // USER TAGS — docId pattern: "{userId}_cat_prefs"
+    // ═══════════════════════════════════════════════════════════════════════
+    match /user_tags/{docId} {
+      allow read, write: if authed() && docId.matches(request.auth.uid + '_.*');
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // WORK CALENDAR
+    // ═══════════════════════════════════════════════════════════════════════
+    //
+    // ⚠️ FIX 3 (tiếp): userIdLocked() trên update
+    //
+    match /work_calendar/{docId} {
+      allow get:    if isMe(resource.data.userId);
+      allow list:   if isMe(resource.data.userId);
+      allow create: if isMe(request.resource.data.userId);
+      allow update: if isMe(resource.data.userId) && userIdLocked();
+      allow delete: if isMe(resource.data.userId);
+    }
+
+    // ⚠️ FIX 4: cal_events không tồn tại trong COLLECTIONS của app
+    //    Rules cũ có match /cal_events/ nhưng code không dùng collection này.
+    //    Xóa rule không dùng để tránh attack surface dư thừa.
+    //    (Nếu sau này cần thêm lại thì uncomment và review kỹ)
+
+  }
+}
