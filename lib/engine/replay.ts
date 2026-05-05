@@ -77,7 +77,7 @@ export function replay(events: EventDoc[]): ReplayedState {
           const idx = state.expenses.findIndex(e => e.id === data.id)
           // FIX: chỉ apply nếu event.userId khớp với expense.userId
           // Ngăn event bị tamper trong localStorage affect expense của user khác
-          if (idx !== -1 && state.expenses[idx].userId === userId) {
+          if (idx !== -1 && (!state.expenses[idx].userId || state.expenses[idx].userId === userId)) {
             state.expenses[idx] = { ...state.expenses[idx], ...(data as Expense) }
           }
           break
@@ -87,7 +87,7 @@ export function replay(events: EventDoc[]): ReplayedState {
           if (!data.id) break
           const idx = state.expenses.findIndex(e => e.id === data.id)
           // FIX: chỉ apply nếu event.userId khớp với expense.userId
-          if (idx !== -1 && state.expenses[idx].userId === userId) {
+          if (idx !== -1 && (!state.expenses[idx].userId || state.expenses[idx].userId === userId)) {
             state.expenses[idx] = {
               ...state.expenses[idx],
               deleted:   true,
@@ -111,7 +111,7 @@ export function replay(events: EventDoc[]): ReplayedState {
           if (!data.id) break
           const idx = state.incomes.findIndex(i => i.id === data.id)
           // FIX: ownership check
-          if (idx !== -1 && state.incomes[idx].userId === userId) {
+          if (idx !== -1 && (!state.incomes[idx].userId || state.incomes[idx].userId === userId)) {
             state.incomes[idx] = {
               ...state.incomes[idx],
               deleted:   true,
@@ -143,7 +143,7 @@ export function replay(events: EventDoc[]): ReplayedState {
           if (!data.id) break
           const idx = state.goals.findIndex(g => g.id === data.id)
           // FIX: ownership check
-          if (idx !== -1 && state.goals[idx].userId === userId) {
+          if (idx !== -1 && (!state.goals[idx].userId || state.goals[idx].userId === userId)) {
             const existing = state.goals[idx]
             const deposits = data.deposits !== undefined
               ? (data.deposits as Goal['deposits'])
@@ -157,7 +157,7 @@ export function replay(events: EventDoc[]): ReplayedState {
           if (!data.id) break
           const idx = state.goals.findIndex(g => g.id === data.id)
           // FIX: ownership check
-          if (idx !== -1 && state.goals[idx].userId === userId) {
+          if (idx !== -1 && (!state.goals[idx].userId || state.goals[idx].userId === userId)) {
             state.goals[idx].deleted = true
           }
           break
@@ -251,7 +251,7 @@ export function replay(events: EventDoc[]): ReplayedState {
           if (!data.id) break
           const idx = state.debts.findIndex(d => d.id === data.id)
           // FIX: ownership check
-          if (idx !== -1 && state.debts[idx].userId === userId) {
+          if (idx !== -1 && (!state.debts[idx].userId || state.debts[idx].userId === userId)) {
             const existing = state.debts[idx]
 
             // App cũ: data.payment = thêm 1 payment đơn { id, amount, date }
@@ -290,7 +290,7 @@ export function replay(events: EventDoc[]): ReplayedState {
           if (!data.id) break
           const idx = state.debts.findIndex(d => d.id === data.id)
           // FIX: ownership check
-          if (idx !== -1 && state.debts[idx].userId === userId) {
+          if (idx !== -1 && (!state.debts[idx].userId || state.debts[idx].userId === userId)) {
             state.debts[idx].deleted = true
           }
           break
@@ -340,7 +340,7 @@ export function replay(events: EventDoc[]): ReplayedState {
           if (!data.id) break
           const idx = state.templates.findIndex(t => t.id === data.id)
           // FIX: ownership check
-          if (idx !== -1 && state.templates[idx].userId === userId) {
+          if (idx !== -1 && (!state.templates[idx].userId || state.templates[idx].userId === userId)) {
             state.templates[idx].deleted = true
           }
           break
