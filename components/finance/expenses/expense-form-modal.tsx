@@ -10,19 +10,17 @@ import { FormField, Input } from '@/components/ui/input'
 import { AmountInput } from '@/components/ui/amount-input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useAppend } from '@/hooks/useAppend'
-import { updateExpense } from '@/lib/services/expenseService'
-import { useSync } from '@/hooks/useSync'
 import { useToast } from '@/hooks/useToast'
 import { useSettingsStore, selectHiddenCategories } from '@/lib/store/settingsStore'
+import { useAuthStore } from '@/lib/store/authStore'
 import { CATEGORIES, type CategoryValue, type Expense } from '@/lib/types/expense'
 import { EVENT_TYPES } from '@/lib/types/events'
 import { newExpenseId } from '@/lib/utils/id'
 import { today } from '@/lib/utils/date'
 import { parseAmount } from '@/lib/utils/currency'
-import { useAuthStore } from '@/lib/store/authStore'
 import { cn } from '@/lib/utils/cn'
 
-// ─── Shared validators ───────────────────────────────────────────────────────
+// ─── Validators ───────────────────────────────────────────────────────────────
 
 const amountSchema = z.string()
   .min(1, 'Nhập số tiền.')
@@ -50,20 +48,18 @@ interface ExpenseFormModalProps {
   open: boolean
   onClose: () => void
   editExpense?: Expense | null
-  /** Copy từ expense có sẵn: prefill category/amount/title/note, date = hôm nay, submit tạo mới */
   copyFrom?: Expense | null
   defaultDate?: string
 }
 
 export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, defaultDate }: ExpenseFormModalProps) {
   const { append, isPending } = useAppend()
-  const sync   = useSync()
   const toast  = useToast()
   const user   = useAuthStore(s => s.user)
   const hidden = useSettingsStore(selectHiddenCategories)
   const visibleCats = CATEGORIES.filter(c => !hidden.includes(c.value))
 
-  // BUG-01 fix: dùng isSubmitting thay isPending — cover cả updateExpense() lẫn append()
+  // BUG-01 fix: isSubmitting covers cả append() lẫn các async ops khác
   const { register, handleSubmit, setValue, watch, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { date: defaultDate ?? today(), category: 'food' },
@@ -80,7 +76,6 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
         category: editExpense.category,
       })
     } else if (copyFrom) {
-      // Copy: prefill mọi field trừ date (default = hôm nay để user lặp lại nhanh)
       reset({
         amount:   String(copyFrom.amount),
         date:     today(),
@@ -95,21 +90,43 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
 
   const onSubmit = async (values: FormValues) => {
     const amount = parseAmount(values.amount)
+    // FIX: userId BẮT BUỘC phải có trong data.
+    // Nếu thiếu → expense được lưu với userId = undefined trong replayedState
+    // → ownership check (state.expenses[idx].userId === event.userId) luôn fail
+    // → EXPENSE_DELETED / EXPENSE_UPDATED không có tác dụng, toast hiện nhưng UI không đổi.
+    const userId = user?.uid ?? ''
+
     try {
       if (editExpense) {
-        if (!user) return
-        await updateExpense(user.uid, editExpense.id, {
-          amount, category: values.category as CategoryValue,
-          date: values.date, note: values.note ?? '', title: values.title,
+        // FIX: Trước đây dùng updateExpense() + sync() — SAI vì:
+        //   1. updateExpense() gọi appendEvent() trực tiếp → không có optimistic update
+        //      → UI không phản hồi ngay, user tưởng bấm không được
+        //   2. sync() sau đó có thể miss event do CLOCK_SKEW_BUFFER_MS = 30s hoặc
+        //      App Check token chưa ready → Firestore read fail → state không cập nhật
+        //
+        // Sau: dùng append() như add và delete — đảm bảo:
+        //   - Optimistic update ngay lập tức (appendLocalEvent)
+        //   - Rollback nếu Firestore write fail (removeLocalEvent)
+        //   - Sync delta sau khi confirmed
+        await append(EVENT_TYPES.EXPENSE_UPDATED, {
+          id:       editExpense.id,
+          userId,
+          amount,
+          category: values.category as CategoryValue,
+          date:     values.date,
+          note:     values.note  ?? '',
+          title:    values.title ?? '',
         })
-        await sync()
         toast.success('Đã cập nhật chi tiêu!')
       } else {
         await append(EVENT_TYPES.EXPENSE_ADDED, {
-          id: newExpenseId(), amount,
-          category: values.category, date: values.date,
-          note:  values.note  ?? '',
-          title: values.title ?? '',
+          id:       newExpenseId(),
+          userId,
+          amount,
+          category: values.category as CategoryValue,
+          date:     values.date,
+          note:     values.note  ?? '',
+          title:    values.title ?? '',
           _debtId: null, _goalId: null, _savingsMonthKey: null,
           _paymentId: null, _depositId: null, _savingsDepositId: null,
         })
@@ -119,12 +136,12 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
     } catch (err) {
       console.error('[expense-form] submit failed:', err)
       toast.error('Không lưu được. Kiểm tra kết nối rồi thử lại.')
-      // Không đóng modal — user có thể thử lại ngay
     }
   }
 
   return (
-    <Modal variant="center" open={open} onClose={onClose} title={editExpense ? 'Sửa chi tiêu' : copyFrom ? 'Sao chép chi tiêu' : 'Thêm chi tiêu'}>
+    <Modal variant="center" open={open} onClose={onClose}
+      title={editExpense ? 'Sửa chi tiêu' : copyFrom ? 'Sao chép chi tiêu' : 'Thêm chi tiêu'}>
       <form onSubmit={handleSubmit(onSubmit)} className="px-4 pb-6 space-y-4">
         {/* Category grid */}
         <div>
@@ -137,8 +154,7 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
                   selectedCategory === cat.value
                     ? 'border-primary bg-primary/10 text-primary'
                     : 'border-border hover:bg-muted text-muted-foreground',
-                )}
-              >
+                )}>
                 <span className="text-xl">{cat.icon}</span>
                 <span className="leading-tight text-center">{cat.label}</span>
               </button>
