@@ -34,7 +34,8 @@ export function Topbar({ title, right }: TopbarProps) {
   }
 
   return (
-    <header className="flex items-center justify-between px-4 border-b border-border bg-card/80 backdrop-blur sticky top-0 z-30"
+    <header
+      className="flex items-center justify-between px-4 border-b border-border bg-card/80 backdrop-blur sticky top-0 z-30"
       style={{ paddingTop: 'env(safe-area-inset-top)', minHeight: 'calc(3.5rem + env(safe-area-inset-top))' }}>
       <h1 className="text-base font-semibold text-foreground truncate">
         {title ?? 'Chi Tiêu'}

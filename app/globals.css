@@ -132,6 +132,15 @@
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
+
+  /* iOS PWA full-height fix:
+     100dvh con bug tren iOS Safari PWA — dung min-height: -webkit-fill-available
+     de cover dung chieu cao man hinh, tranh ca khoang trang top lan black bar bottom */
+  .app-shell {
+    height: 100vh;
+    height: -webkit-fill-available;
+    min-height: -webkit-fill-available;
+  }
 }
 
 /* ─── Animations ─────────────────────────────────────────────────────────────── */
