@@ -32,6 +32,7 @@ export function ExpensesTab() {
   const [editTarget,    setEditTarget]    = useState<Expense | null>(null)
   const [copyTarget,    setCopyTarget]    = useState<Expense | null>(null)
   const [deleteTarget,  setDeleteTarget]  = useState<Expense | null>(null)
+  const [isDeleting,    setIsDeleting]    = useState(false)
 
   // ── Date range filter ─────────────────────────────────────────────────────
   const [dateFrom, setDateFrom] = useState('')
@@ -62,12 +63,13 @@ export function ExpensesTab() {
   }, [monthExpenses, dateFrom, dateTo])
 
   const handleDelete = async () => {
-    if (!deleteTarget) return
+    if (!deleteTarget || isDeleting) return  // FIX: chặn double-click
     if (isSavingsExpense(deleteTarget)) {
       toast.warning('Chỉ được quản lý ở tab Tiết kiệm.')
       setDeleteTarget(null)
       return
     }
+    setIsDeleting(true)  // FIX: disable nút ngay lập tức
     try {
       await append(EVENT_TYPES.EXPENSE_DELETED, {
         id: deleteTarget.id,
@@ -78,6 +80,8 @@ export function ExpensesTab() {
     } catch (err) {
       console.error('[expenses] delete failed:', err)
       toast.error('Không xóa được. Thử lại nhé.')
+    } finally {
+      setIsDeleting(false)  // FIX: reset dù thành công hay thất bại
     }
   }
 
@@ -193,7 +197,8 @@ export function ExpensesTab() {
         message={deleteTarget
           ? `${formatMoney(deleteTarget.amount, false)} — ${deleteTarget.note || 'Không có ghi chú'}`
           : ''}
-        confirmLabel="Xóa" danger />
+        confirmLabel="Xóa" danger
+        loading={isDeleting} />  {/* FIX: truyền loading → disable button khi đang xóa */}
     </div>
   )
 }
