@@ -1,74 +1,148 @@
-# Chi Tieu App - Deploy Script v2
+# Chi Tieu -- Deploy Script
 # Usage: .\deploy.ps1
+# Usage: .\deploy.ps1 -Message "fix: sua loi xoa chi tieu"
+#
+# Script tu dong:
+#   1. Git add + commit + push len GitHub
+#   2. Doi Vercel build xong
+#   3. Gui push notification cho users
+
+param(
+    [string]$Message = ""
+)
 
 $ErrorActionPreference = "Stop"
+
+$APP_URL      = "https://nnlakagnoul.vercel.app"
 $FUNCTION_URL = "https://asia-southeast1-nnlakagnoul.cloudfunctions.net/notifyNewVersion"
+$WAIT_SECONDS = 90
 
-Write-Host ""
-Write-Host "=== CHI TIEU - DEPLOY ===" -ForegroundColor Cyan
-Write-Host ""
+function Info ($t) { Write-Host "  $t" -ForegroundColor Gray }
+function OK   ($t) { Write-Host "  $t" -ForegroundColor Green }
+function Warn ($t) { Write-Host "  WARNING: $t" -ForegroundColor Yellow }
+function Fail ($t) { Write-Host "  ERROR: $t" -ForegroundColor Red }
+function Step ($n, $total, $t) { Write-Host "[$n/$total] $t" -ForegroundColor Cyan }
 
-# Step 1: Build info
-try { $gitHash = (git rev-parse --short HEAD 2>$null) } catch {}
-$timestamp   = (Get-Date -Format "yyyyMMdd-HHmm")
-$buildNumber = if ($gitHash) { "$gitHash-$timestamp" } else { $timestamp }
+# Build info
 $version     = (Get-Date -Format "yyyy.MM.dd")
 $buildTime   = (Get-Date -Format "dd/MM/yyyy HH:mm")
+$buildTag    = (Get-Date -Format "yyyyMMdd-HHmm")
+try { $gitHash = (git rev-parse --short HEAD 2>$null) } catch { $gitHash = "" }
 
-Write-Host "Version: $version" -ForegroundColor Gray
-Write-Host "Build:   $buildNumber" -ForegroundColor Gray
-Write-Host "Time:    $buildTime" -ForegroundColor Gray
+Write-Host ""
+Write-Host "=== CHI TIEU -- DEPLOY ===" -ForegroundColor Cyan
+Write-Host ""
+Info "Version : $version"
+Info "Time    : $buildTime"
 Write-Host ""
 
-# Step 2: Deploy to Vercel with build-env injection
-Write-Host "[1/3] Deploying to Vercel..." -ForegroundColor Yellow
-# --yes: bỏ qua mọi prompt (bao gồm prompt "upgrade CLI?" xuất hiện từ v51.8)
-# để script không bị stuck hoặc exit sớm khi có version mới.
-vercel --prod --yes `
-    --build-env "NEXT_PUBLIC_BUILD_NUMBER=$buildNumber" `
-    --build-env "NEXT_PUBLIC_BUILD_VERSION=$version" `
-    --build-env "NEXT_PUBLIC_BUILD_TIME=$buildTime"
+# ---- Step 1: Git ----
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: Vercel deploy failed!" -ForegroundColor Red
-    exit 1
+Step 1 3 "Git commit va push..."
+
+$status = git status --porcelain 2>$null
+$skipGit = $false
+
+if (-not $status) {
+    Warn "Khong co file nao thay doi."
+    $skipGit = $true
 }
-Write-Host "OK: Deployed to Vercel!" -ForegroundColor Green
-Write-Host ""
 
-# Step 3: Wait for CDN
-Write-Host "[2/3] Waiting 30s for CDN..." -ForegroundColor Yellow
-for ($i = 30; $i -gt 0; $i--) {
-    Write-Host -NoNewline "`r    $i seconds remaining...  "
-    Start-Sleep -Seconds 1
+if (-not $skipGit) {
+    if (-not $Message) {
+        git add -A | Out-Null
+        $changedFiles = (git diff --cached --name-only 2>$null)
+        $fileCount = ($changedFiles -split "`n" | Where-Object { $_ }).Count
+        $Message = "deploy: update $fileCount files - $buildTime"
+    }
+
+    try {
+        git add -A | Out-Null
+        git commit -m $Message | Out-Null
+        OK "Committed: $Message"
+    } catch {
+        Fail "Git commit that bai: $($_.Exception.Message)"
+        exit 1
+    }
+
+    try { $gitHash = (git rev-parse --short HEAD 2>$null) } catch {}
+
+    try {
+        $branch = (git branch --show-current 2>$null)
+        if (-not $branch) { $branch = "main" }
+        git push origin $branch | Out-Null
+        OK "Pushed to GitHub (branch: $branch) -- commit: $gitHash"
+    } catch {
+        Fail "Git push that bai: $($_.Exception.Message)"
+        exit 1
+    }
 }
-Write-Host "`r    Done!                       " -ForegroundColor Green
+
+$buildNumber = if ($gitHash) { "$gitHash-$buildTag" } else { $buildTag }
+
 Write-Host ""
 
-# Step 4: Send notification
-Write-Host "[3/3] Sending push notification..." -ForegroundColor Yellow
+# ---- Step 2: Doi Vercel build ----
+
+Step 2 3 "Doi Vercel build (${WAIT_SECONDS}s)..."
+Info "Vercel tu dong detect commit moi va build."
+
+$elapsed = 0
+while ($elapsed -lt $WAIT_SECONDS) {
+    $remaining = $WAIT_SECONDS - $elapsed
+    Write-Host -NoNewline "`r  Con lai: $remaining giay...   "
+    Start-Sleep -Seconds 5
+    $elapsed += 5
+}
+Write-Host "`r  Da doi du ${WAIT_SECONDS}s.              " -ForegroundColor Green
+
+try {
+    $check = Invoke-WebRequest -Uri $APP_URL -UseBasicParsing -TimeoutSec 10 -ErrorAction SilentlyContinue
+    if ($check.StatusCode -eq 200) {
+        OK "App dang chay OK (HTTP 200)"
+    } else {
+        Warn "App tra ve HTTP $($check.StatusCode)"
+    }
+} catch {
+    Warn "Khong ping duoc app: $($_.Exception.Message)"
+}
+
+Write-Host ""
+
+# ---- Step 3: Push notification ----
+
+Step 3 3 "Gui push notification..."
+
 try {
     $secret = firebase functions:secrets:access NOTIFY_SECRET 2>$null
-    if (-not $secret -or $secret.Length -lt 10) { throw "Cannot get secret" }
+    if (-not $secret -or $secret.Length -lt 10) { throw "Secret khong hop le" }
 } catch {
-    Write-Host "ERROR: Cannot read NOTIFY_SECRET from Firebase." -ForegroundColor Red
-    exit 1
+    Warn "Khong lay duoc NOTIFY_SECRET tu Firebase."
+    Info "Chay lenh nay de setup: firebase functions:secrets:set NOTIFY_SECRET"
+    Write-Host ""
+    Write-Host "=== DEPLOY XONG (bo qua notification) ===" -ForegroundColor Yellow
+    Write-Host "App: $APP_URL" -ForegroundColor Cyan
+    exit 0
 }
 
-$body = @{ secret = $secret; version = $version; buildNumber = $buildNumber } | ConvertTo-Json
+$body = @{
+    secret      = $secret
+    version     = $version
+    buildNumber = $buildNumber
+} | ConvertTo-Json
 
 try {
-    $response = Invoke-RestMethod -Uri $FUNCTION_URL -Method Post -Body $body -ContentType "application/json"
-    Write-Host "OK: Notification sent!" -ForegroundColor Green
-    Write-Host "    Total users : $($response.total)" -ForegroundColor Gray
-    Write-Host "    Sent        : $($response.sent)" -ForegroundColor Gray
-    Write-Host "    Failed      : $($response.failed)" -ForegroundColor Gray
+    $res = Invoke-RestMethod -Uri $FUNCTION_URL -Method Post `
+        -Body $body -ContentType "application/json" -TimeoutSec 15
+    OK "Notification da gui!"
+    Info "Total : $($res.total) users"
+    Info "Sent  : $($res.sent)"
+    if ($res.failed -gt 0) { Warn "Failed: $($res.failed)" }
 } catch {
-    Write-Host "WARNING: Deploy OK but notification failed:" -ForegroundColor Yellow
-    Write-Host "    $($_.Exception.Message)" -ForegroundColor Red
+    Warn "Deploy OK nhung notification that bai: $($_.Exception.Message)"
 }
 
 Write-Host ""
-Write-Host "=== DEPLOY COMPLETE! ===" -ForegroundColor Green
-Write-Host "App URL: https://expense-app-five-peach.vercel.app" -ForegroundColor Cyan
+Write-Host "=== DEPLOY HOAN TAT! ===" -ForegroundColor Green
+Write-Host "App: $APP_URL" -ForegroundColor Cyan
 Write-Host ""

@@ -22,9 +22,24 @@ const firebaseConfig = {
 // Singleton — tránh init nhiều lần khi Next.js hot reload
 const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
-// FIX S-12: Khởi tạo App Check ngay sau khi init app, trước khi init services
-// Điều này đảm bảo mọi request đến Auth/Firestore/FCM đều được App Check token đính kèm
-initAppCheck()
+// PERF FIX: Defer initAppCheck() ra khỏi critical render path.
+//
+// Trước: initAppCheck() chạy đồng bộ lúc module load
+//   → reCAPTCHA Enterprise phải load script 400KB + chạy bot assessment
+//   → TOÀN BỘ xảy ra trước khi app render → user thấy màn hình trắng lâu hơn
+//
+// Sau: dùng requestIdleCallback (hoặc setTimeout fallback)
+//   → App shell render ngay lập tức
+//   → reCAPTCHA khởi tạo ngầm khi browser rảnh (~50-200ms sau)
+//   → Firebase SDK tự buffer requests và đính kèm App Check token khi sẵn sàng
+//   → Không ảnh hưởng đến bảo mật vì token được attach trước request thực sự
+if (typeof window !== 'undefined') {
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => initAppCheck(), { timeout: 3000 })
+  } else {
+    setTimeout(initAppCheck, 0)
+  }
+}
 
 const auth: Auth = getAuth(app)
 const db: Firestore = getFirestore(app)

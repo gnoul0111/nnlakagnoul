@@ -19,7 +19,7 @@ export function AppShell({ children, title, topbarRight, banner, noPadding }: Ap
   const pathname = usePathname()
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex bg-background overflow-hidden" style={{ height: '100dvh' }}>
       <NavigationProgress />
       <Sidebar />
 
