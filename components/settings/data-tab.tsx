@@ -21,10 +21,11 @@ import {
 import { cn } from '@/lib/utils/cn'
 
 // ─── Build info ───────────────────────────────────────────────────────────────
-// Inject từ deploy.ps1: NEXT_PUBLIC_BUILD_NUMBER + BUILD_VERSION + BUILD_TIME
-const BUILD_NUMBER  = process.env.NEXT_PUBLIC_BUILD_NUMBER  ?? 'dev'
-const BUILD_VERSION = process.env.NEXT_PUBLIC_BUILD_VERSION ?? '0.1.0'
-const BUILD_TIME    = process.env.NEXT_PUBLIC_BUILD_TIME    ?? ''
+// Build info tu dong inject luc Vercel build (xem next.config.ts)
+// BUILD_ID = 7 ky tu dau cua git commit SHA, vd: "a3f2b1c"
+// BUILD_TIME = thoi diem Vercel chay build, dinh dang dd/MM/yyyy HH:mm
+const BUILD_ID   = process.env.NEXT_PUBLIC_BUILD_ID   ?? 'local'
+const BUILD_TIME = process.env.NEXT_PUBLIC_BUILD_TIME ?? ''
 
 // ─── Section helpers ──────────────────────────────────────────────────────────
 
@@ -189,7 +190,7 @@ export function DataTab() {
               Đang dùng phiên bản mới nhất
             </p>
             <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-              v{BUILD_VERSION} · Build {BUILD_NUMBER}
+              Build {BUILD_ID}
             </p>
             {BUILD_TIME && (
               <p className="text-[11px] text-muted-foreground/70 mt-0.5">

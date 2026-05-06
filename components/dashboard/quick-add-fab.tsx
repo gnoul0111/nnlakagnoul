@@ -33,7 +33,8 @@ export function QuickAddFab() {
         />
       )}
 
-      <div className="lg:hidden fixed bottom-20 right-4 z-30 flex flex-col items-end gap-2.5">
+      <div className="lg:hidden fixed right-4 z-30 flex flex-col items-end gap-2.5"
+        style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom) + 0.75rem)' }}>
         {/* Sub-buttons — animate in khi expanded */}
         {expanded && (
           <>

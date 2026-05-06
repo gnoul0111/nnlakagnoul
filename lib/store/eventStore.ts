@@ -7,15 +7,7 @@ import type { EventDoc } from '@/lib/types/events'
 
 const CACHE_KEY_PREFIX = 'chitieu_events_cache_'
 
-// FIX S-06: Event cache chứa toàn bộ lịch sử chi tiêu dạng plaintext.
-// Dùng sessionStorage thay localStorage → data tự xóa khi đóng tab/browser.
-// Đây là tradeoff: mất "stale-while-revalidate" qua lần mở app tiếp theo,
-// nhưng bảo vệ user trên shared device.
-//
-// Nếu muốn giữ localStorage (vd: PWA offline), cần encrypt cache bằng
-// Web Crypto API với key derive từ Firebase ID token trước khi ghi.
-// Đó là roadmap — hiện tại sessionStorage là fix đơn giản và an toàn hơn.
-
+// FIX S-06: sessionStorage thay localStorage (xem comment gốc)
 const storage = typeof window !== 'undefined' ? sessionStorage : null
 
 interface CachePayload {
@@ -42,14 +34,12 @@ function writeLocalCache(userId: string, payload: CachePayload): void {
   try {
     storage.setItem(getCacheKey(userId), JSON.stringify(payload))
   } catch (e) {
-    // QuotaExceededError: sessionStorage thường nhỏ hơn localStorage (~5MB)
-    // Nếu full: xóa cache cũ và thử lại với data hiện tại
     console.warn('[EventStore] sessionStorage write failed:', e)
     try {
       storage.removeItem(getCacheKey(userId))
       storage.setItem(getCacheKey(userId), JSON.stringify(payload))
     } catch {
-      // Quota quá nhỏ ngay cả với data hiện tại — bỏ qua, in-memory vẫn hoạt động
+      // Quota quá nhỏ — in-memory vẫn hoạt động
     }
   }
 }
@@ -59,8 +49,36 @@ function clearLocalCache(userId: string): void {
 }
 
 // ─── Sync mutex ───────────────────────────────────────────────────────────────
+//
+// FIX SYNC-03: Dùng một Promise thay vì boolean flag để serialise tất cả
+// sync operations (syncBackground + syncEvents).
+//
+// Vấn đề gốc:
+//   - _syncInProgress chỉ guard syncBackground. syncEvents không check flag này.
+//   - Khi flushQueue() gọi syncEvents() cùng lúc với loadEvents() đang chạy
+//     syncBackground(), cả hai đọc cùng snapshot cache, fetch cùng new events,
+//     merge độc lập, và last set() call thắng → contribution của cái kia bị mất.
+//   - Timeline nguy hiểm:
+//       T0: syncBackground reads cache=[evt_1], _syncInProgress=true
+//       T1: syncEvents reads same stale cache=[evt_1] (no mutex check)
+//       T2: syncBackground gets newEvents=[evt_2], merges → [evt_1, evt_2]
+//       T3: syncBackground set({ _eventsCache: [evt_1, evt_2] })  ← correct
+//       T4: syncEvents gets newEvents=[evt_2, evt_3], merges from STALE base
+//           → [evt_1, evt_2, evt_3] if lucky, [evt_1, evt_3] if timing differs
+//       T5: syncEvents set({ _eventsCache: [evt_1, evt_3] })  ← LOST evt_2!
+//
+// Fix: replace boolean flag with a Promise chain (_syncChain).
+// Every sync operation appends to the chain → they run sequentially.
+// No operation can race another; each one sees the latest committed cache.
 
-let _syncInProgress = false
+let _syncChain: Promise<void> = Promise.resolve()
+
+function enqueueSyncOperation(op: () => Promise<void>): Promise<void> {
+  _syncChain = _syncChain.then(op).catch(() => {
+    // Don't let one failure block all future syncs
+  })
+  return _syncChain
+}
 
 // ─── Store state ──────────────────────────────────────────────────────────────
 
@@ -84,36 +102,27 @@ interface EventStoreState {
 
 export const useEventStore = create<EventStoreState>((set, get) => {
 
-  const syncBackground = async (userId: string, lastSync: number) => {
-    if (_syncInProgress) return
-    _syncInProgress = true
+  // FIX SYNC-03: syncBackground and syncEvents both enqueue via _syncChain
+  // → strictly sequential, no interleaving possible.
 
-    try {
-      const newEvents = await getNewEventsSince(userId, lastSync)
-      if (newEvents.length === 0) {
-        _syncInProgress = false
-        return
-      }
+  const _doSync = async (userId: string, lastSync: number) => {
+    const newEvents = await getNewEventsSince(userId, lastSync)
+    if (newEvents.length === 0) return
 
-      const currentCache = get()._eventsCache ?? []
-      const cleanedCache = pruneReplacedOptimistic(currentCache, newEvents)
-      const merged       = mergeEvents(cleanedCache, newEvents)
-      const newLastSync  = Date.now()
+    const currentCache = get()._eventsCache ?? []
+    const cleanedCache = pruneReplacedOptimistic(currentCache, newEvents)
+    const merged       = mergeEvents(cleanedCache, newEvents)
+    const newLastSync  = Date.now()
 
-      writeLocalCache(userId, { events: merged, lastSync: newLastSync })
+    writeLocalCache(userId, { events: merged, lastSync: newLastSync })
 
-      const replayedState = replay(merged)
-      set({
-        _eventsCache:   merged,
-        _lastSync:      newLastSync,
-        _currentUserId: userId,
-        replayedState,
-      })
-    } catch (err) {
-      console.error('[EventStore] syncBackground failed:', err)
-    } finally {
-      _syncInProgress = false
-    }
+    const replayedState = replay(merged)
+    set({
+      _eventsCache:   merged,
+      _lastSync:      newLastSync,
+      _currentUserId: userId,
+      replayedState,
+    })
   }
 
   return {
@@ -132,11 +141,11 @@ export const useEventStore = create<EventStoreState>((set, get) => {
 
       // Tầng 1: in-memory cache
       if (sameUser && _eventsCache && _lastSync) {
-        syncBackground(userId, _lastSync)
+        enqueueSyncOperation(() => _doSync(userId, _lastSync))
         return
       }
 
-      // Tầng 2: sessionStorage cache (FIX S-06: was localStorage)
+      // Tầng 2: sessionStorage cache
       const localCache = readLocalCache(userId)
       if (localCache && localCache.events.length > 0) {
         const staleState = replay(localCache.events)
@@ -147,7 +156,7 @@ export const useEventStore = create<EventStoreState>((set, get) => {
           replayedState:  staleState,
           isLoading:      false,
         })
-        syncBackground(userId, localCache.lastSync)
+        enqueueSyncOperation(() => _doSync(userId, localCache.lastSync))
         return
       }
 
@@ -174,27 +183,37 @@ export const useEventStore = create<EventStoreState>((set, get) => {
       }
     },
 
+    // FIX SYNC-03: syncEvents now enqueues via _syncChain instead of running
+    // immediately. This prevents concurrent execution with syncBackground
+    // (which is also enqueued). Both operations are guaranteed to see the
+    // latest committed cache state rather than a stale snapshot.
     syncEvents: async (userId: string) => {
       const { _eventsCache, _lastSync } = get()
       if (!_eventsCache || !_lastSync) {
         await get().loadEvents(userId)
         return
       }
-      try {
-        const newEvents = await getNewEventsSince(userId, _lastSync)
-        if (newEvents.length === 0) return
 
-        const currentCache = get()._eventsCache ?? []
-        const cleanedCache = pruneReplacedOptimistic(currentCache, newEvents)
-        const merged     = mergeEvents(cleanedCache, newEvents)
-        const lastSync   = Date.now()
+      await enqueueSyncOperation(async () => {
+        try {
+          // Re-read _lastSync inside the queued operation — it may have been
+          // updated by a preceding operation in the chain.
+          const freshLastSync = get()._lastSync ?? _lastSync
+          const newEvents = await getNewEventsSince(userId, freshLastSync)
+          if (newEvents.length === 0) return
 
-        writeLocalCache(userId, { events: merged, lastSync })
-        const replayedState = replay(merged)
-        set({ _eventsCache: merged, _lastSync: lastSync, replayedState })
-      } catch (err) {
-        console.error('[EventStore] syncEvents failed:', err)
-      }
+          const currentCache = get()._eventsCache ?? []
+          const cleanedCache = pruneReplacedOptimistic(currentCache, newEvents)
+          const merged       = mergeEvents(cleanedCache, newEvents)
+          const lastSync     = Date.now()
+
+          writeLocalCache(userId, { events: merged, lastSync })
+          const replayedState = replay(merged)
+          set({ _eventsCache: merged, _lastSync: lastSync, replayedState })
+        } catch (err) {
+          console.error('[EventStore] syncEvents failed:', err)
+        }
+      })
     },
 
     appendLocalEvent: (event: EventDoc) => {
@@ -226,13 +245,14 @@ export const useEventStore = create<EventStoreState>((set, get) => {
 
     invalidateCache: (userId: string) => {
       clearLocalCache(userId)
-      _syncInProgress = false
+      // Reset the sync chain so pending operations don't run against stale state
+      _syncChain = Promise.resolve()
       set({ _eventsCache: null, _lastSync: null, replayedState: null })
     },
 
     clearAllCache: (userId: string) => {
       clearLocalCache(userId)
-      _syncInProgress = false
+      _syncChain = Promise.resolve()
       set({
         _eventsCache:   null,
         _lastSync:      null,
@@ -244,23 +264,36 @@ export const useEventStore = create<EventStoreState>((set, get) => {
 })
 
 // ─── Merge helper ─────────────────────────────────────────────────────────────
+//
+// FIX SYNC-04: thêm tiebreaker bằng createdAt ISO string.
+//
+// Vấn đề gốc: sort chỉ dùng timestamp.toMillis().
+// Khi appendEventsBatch đã fix SYNC-01 (per-event timestamps từ createdAt),
+// timestamps sẽ strictly-increasing → tiebreaker hiếm khi cần.
+// Nhưng với single appendEvent (online path), Timestamp.now() có độ phân giải
+// 1 giây → hai events trong cùng 1 giây sẽ có cùng timestamp.toMillis().
+// createdAt (ISO string với milliseconds) đảm bảo stable sort trong mọi trường hợp.
 
 function mergeEvents(existing: EventDoc[], incoming: EventDoc[]): EventDoc[] {
   if (incoming.length === 0) return existing
-  const idSet  = new Set(existing.map(e => e.id))
+  const idSet   = new Set(existing.map(e => e.id))
   const newOnes = incoming.filter(e => !idSet.has(e.id))
   if (newOnes.length === 0) return existing
   return [...existing, ...newOnes].sort((a, b) => {
     const aMs = a.timestamp?.toMillis?.() ?? 0
     const bMs = b.timestamp?.toMillis?.() ?? 0
-    return aMs - bMs
+    if (aMs !== bMs) return aMs - bMs
+    // FIX SYNC-04: ISO string tiebreaker — createdAt has ms precision
+    // whereas Firestore Timestamp only has second precision in some cases.
+    // This guarantees a stable, deterministic order for same-second events.
+    return (a.createdAt ?? '').localeCompare(b.createdAt ?? '')
   })
 }
 
 // ─── Prune optimistic events ──────────────────────────────────────────────────
 
 function getDomainSignature(event: EventDoc): string | null {
-  const data = event.data ?? {}
+  const data      = event.data ?? {}
   const eventType = String(event.eventType).toUpperCase()
 
   if (data.id) return `${eventType}:${data.id}`

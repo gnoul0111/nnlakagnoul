@@ -13,7 +13,7 @@ const MAX_EVENT_AGE_MS  = 7 * 24 * 60 * 60 * 1000  // 7 days
 export interface QueuedEvent {
   id:       string
   input:    EventDocInput
-  queuedAt: string   // ISO string
+  queuedAt: string   // ISO string — used for age filter AND for SYNC-01 timestamp derivation
 }
 
 // ─── Storage helpers ──────────────────────────────────────────────────────────
@@ -44,6 +44,25 @@ function generateQueueId(): string {
   return `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
+// ─── Flush mutex ──────────────────────────────────────────────────────────────
+//
+// FIX SYNC-02: Bản gốc không có mutex trên flushQueue.
+//
+// Vấn đề:
+//   - setupOfflineQueueListener gắn handler cho window 'online' event.
+//   - Nếu đồng thời có code khác gọi flushQueue() (vd: useAppend khi reconnect,
+//     hay component lifecycle), cả hai đọc cùng snapshot queue từ localStorage,
+//     cùng gọi appendEventsBatch với cùng events.
+//   - Mỗi addDoc() tạo một Firestore document MỚI → duplicate event documents.
+//   - pruneReplacedOptimistic bảo vệ UI khỏi hiển thị double, nhưng Firestore
+//     tích lũy orphan documents → tăng storage cost + slow queries theo thời gian.
+//
+// Fix: _flushInProgress flag. Nếu flush đang chạy, call mới skip ngay lập tức.
+// Không dùng Promise chain như _syncChain trong eventStore vì flushQueue là
+// fire-and-forget — nếu đang flush rồi, skip là đúng (không cần queue thêm).
+
+let _flushInProgress = false
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export function enqueueEvent(input: EventDocInput): void {
@@ -56,7 +75,12 @@ export function enqueueEvent(input: EventDocInput): void {
 
   queue.push({
     id:       generateQueueId(),
-    input,
+    input:    {
+      ...input,
+      // Ensure createdAt is set at enqueue time — this is the source of truth
+      // for SYNC-01 fix: appendEventsBatch derives per-event timestamps from this.
+      createdAt: input.createdAt ?? new Date().toISOString(),
+    },
     queuedAt: new Date().toISOString(),
   })
   writeQueue(queue)
@@ -75,23 +99,20 @@ export function clearQueue(): void {
 /**
  * Flush queue to Firestore.
  *
- * FIX BUG-B: After a successful flush we now trigger a delta sync on the
- * event store so that optimistic (`optimistic_xxx`) events in the local
- * cache are pruned and replaced with confirmed Firestore IDs.
- *
- * Without this, the local sessionStorage cache keeps stale optimistic events
- * indefinitely until the user's next action happens to trigger syncEvents().
- *
- * FIX BUG-E: appendEventsBatch is wrapped per-chunk with individual error
- * handling. If one chunk fails, the successfully-written chunks are removed
- * from the queue (to avoid duplicating them on retry) while the failed chunk
- * is preserved for re-sending. This prevents orphan Firestore event documents.
- *
- * NOTE on BUG-E: the per-chunk granularity is a pragmatic tradeoff. True
- * idempotency would require server-side dedup by a client-generated
- * idempotency key. That is tracked as a roadmap item.
+ * SYNC-02 FIX: _flushInProgress mutex prevents concurrent double-flush.
+ * SYNC-01 FIX: events forwarded with their original createdAt so
+ *   appendEventsBatch (fixed) can derive per-event strictly-increasing timestamps.
+ * BUG-B FIX: post-flush syncEvents prunes stale optimistic events.
+ * BUG-E FIX: chunk-level error isolation; succeeded chunks removed from queue.
  */
 export async function flushQueue(): Promise<void> {
+  // FIX SYNC-02: bail out immediately if another flush is in progress.
+  // The running flush will handle all currently-queued events.
+  if (_flushInProgress) {
+    console.log('[OfflineQueue] Flush already in progress — skipping concurrent call')
+    return
+  }
+
   const currentUser = auth.currentUser
   if (!currentUser) {
     console.warn('[OfflineQueue] No authenticated user — skipping flush')
@@ -101,98 +122,81 @@ export async function flushQueue(): Promise<void> {
   const queue = readQueue()
   if (queue.length === 0) return
 
-  const now = Date.now()
-  let filteredByUser = 0
-  let filteredByAge  = 0
+  _flushInProgress = true
 
-  const validQueue = queue.filter(q => {
-    if (q.input.userId !== currentUser.uid) {
-      filteredByUser++
-      return false
+  try {
+    const now = Date.now()
+    let filteredByUser = 0
+    let filteredByAge  = 0
+
+    const validQueue = queue.filter(q => {
+      if (q.input.userId !== currentUser.uid) {
+        filteredByUser++
+        return false
+      }
+      const age = now - new Date(q.queuedAt).getTime()
+      if (age > MAX_EVENT_AGE_MS) {
+        filteredByAge++
+        return false
+      }
+      return true
+    })
+
+    if (filteredByUser > 0) {
+      console.warn(`[OfflineQueue] Dropped ${filteredByUser} events with mismatched userId`)
     }
-    const age = now - new Date(q.queuedAt).getTime()
-    if (age > MAX_EVENT_AGE_MS) {
-      filteredByAge++
-      return false
+    if (filteredByAge > 0) {
+      console.warn(`[OfflineQueue] Dropped ${filteredByAge} events older than 7 days`)
     }
-    return true
-  })
 
-  if (filteredByUser > 0) {
-    console.warn(`[OfflineQueue] Dropped ${filteredByUser} events with mismatched userId`)
-  }
-  if (filteredByAge > 0) {
-    console.warn(`[OfflineQueue] Dropped ${filteredByAge} events older than 7 days`)
-  }
-
-  if (validQueue.length === 0) {
-    // Nothing to send — still clear the queue (filtered events are discarded)
-    clearQueue()
-    return
-  }
-
-  // ── FIX BUG-E: chunk-level error isolation ─────────────────────────────────
-  //
-  // Original code called appendEventsBatch() with all events at once. If it
-  // threw (e.g. network error mid-batch), clearQueue() was never reached, so
-  // the whole queue was retried — including events already written to Firestore,
-  // creating orphan duplicate documents.
-  //
-  // New approach: send events in granular chunks (CHUNK_SIZE), track which
-  // chunks succeeded, and only remove those from the queue. Failed chunks
-  // remain queued for the next retry. This minimises but does not fully
-  // eliminate the Firestore dup window — true idempotency needs server-side
-  // dedup keys (roadmap).
-  const CHUNK_SIZE = 100
-  const succeeded: QueuedEvent[] = []
-  const failed:    QueuedEvent[] = []
-
-  for (let i = 0; i < validQueue.length; i += CHUNK_SIZE) {
-    const chunk = validQueue.slice(i, i + CHUNK_SIZE)
-    try {
-      await appendEventsBatch(chunk.map(q => q.input))
-      succeeded.push(...chunk)
-    } catch (err) {
-      console.error(`[OfflineQueue] Chunk ${i / CHUNK_SIZE} failed:`, err)
-      failed.push(...chunk)
-      // Continue trying remaining chunks rather than aborting entirely
+    if (validQueue.length === 0) {
+      clearQueue()
+      return
     }
-  }
 
-  // Remove succeeded events from queue; preserve failed events for retry
-  if (failed.length === 0) {
-    clearQueue()
-  } else {
-    // Rebuild queue: only the events that were not sent
-    const remaining = queue.filter(q =>
-      failed.some(f => f.id === q.id),
-    )
-    writeQueue(remaining)
-    console.warn(`[OfflineQueue] ${failed.length} events failed to flush, will retry`)
-  }
+    // BUG-E FIX: per-chunk error isolation
+    // SYNC-01: inputs carry their original createdAt → appendEventsBatch (fixed)
+    //   derives strictly-increasing timestamps from these values.
+    const CHUNK_SIZE = 100
+    const succeeded: QueuedEvent[] = []
+    const failed:    QueuedEvent[] = []
 
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('offlinequeue:flushed'))
-  }
-
-  // ── FIX BUG-B: trigger delta sync so optimistic events are pruned ──────────
-  //
-  // Before this fix: after the queue flush, the local eventStore cache still
-  // held `optimistic_xxx` prefixed events. The confirmed Firestore events
-  // would not appear locally until the user's next interaction triggered
-  // syncEvents(). In a PWA where the user might be idle, this meant stale
-  // optimistic data could persist in the session indefinitely.
-  //
-  // We lazily import the store to avoid a circular dependency at module load
-  // time (offlineQueue → eventStore → eventService → offlineQueue).
-  if (succeeded.length > 0 && currentUser) {
-    try {
-      const { useEventStore } = await import('@/lib/store/eventStore')
-      await useEventStore.getState().syncEvents(currentUser.uid)
-    } catch (err) {
-      // Non-fatal — optimistic events will be reconciled on next user action
-      console.warn('[OfflineQueue] Post-flush sync failed (non-fatal):', err)
+    for (let i = 0; i < validQueue.length; i += CHUNK_SIZE) {
+      const chunk = validQueue.slice(i, i + CHUNK_SIZE)
+      try {
+        await appendEventsBatch(chunk.map(q => q.input))
+        succeeded.push(...chunk)
+      } catch (err) {
+        console.error(`[OfflineQueue] Chunk ${Math.floor(i / CHUNK_SIZE)} failed:`, err)
+        failed.push(...chunk)
+      }
     }
+
+    if (failed.length === 0) {
+      clearQueue()
+    } else {
+      const remaining = queue.filter(q => failed.some(f => f.id === q.id))
+      writeQueue(remaining)
+      console.warn(`[OfflineQueue] ${failed.length} events failed to flush, will retry`)
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('offlinequeue:flushed'))
+    }
+
+    // BUG-B FIX: trigger delta sync to prune stale optimistic events
+    if (succeeded.length > 0) {
+      try {
+        const { useEventStore } = await import('@/lib/store/eventStore')
+        await useEventStore.getState().syncEvents(currentUser.uid)
+      } catch (err) {
+        console.warn('[OfflineQueue] Post-flush sync failed (non-fatal):', err)
+      }
+    }
+
+  } finally {
+    // Always release the mutex — even on unexpected errors
+    _flushInProgress = false
   }
 }
 
