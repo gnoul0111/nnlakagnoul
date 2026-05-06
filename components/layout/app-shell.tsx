@@ -26,7 +26,7 @@ export function AppShell({ children, title, topbarRight, banner, noPadding }: Ap
       {/* Cột phải: Topbar + main + BottomNav (mobile).
           BottomNav nằm trong flex flow, không còn position:fixed,
           nên main tự động chiếm đúng không gian còn lại không bị che */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0">
         <Topbar title={title} right={topbarRight} />
         {banner}
 

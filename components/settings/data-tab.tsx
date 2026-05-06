@@ -21,10 +21,8 @@ import {
 import { cn } from '@/lib/utils/cn'
 
 // ─── Build info ───────────────────────────────────────────────────────────────
-// Build info tu dong inject luc Vercel build (xem next.config.ts)
-// BUILD_ID = 7 ky tu dau cua git commit SHA, vd: "a3f2b1c"
-// BUILD_TIME = thoi diem Vercel chay build, dinh dang dd/MM/yyyy HH:mm
-const BUILD_ID   = process.env.NEXT_PUBLIC_BUILD_ID   ?? 'local'
+// Build time tu dong inject luc Vercel build (xem next.config.ts)
+// Hien thi theo gio Viet Nam (Asia/Ho_Chi_Minh), vd: "06/05/2026, 08:57"
 const BUILD_TIME = process.env.NEXT_PUBLIC_BUILD_TIME ?? ''
 
 // ─── Section helpers ──────────────────────────────────────────────────────────
@@ -190,13 +188,9 @@ export function DataTab() {
               Đang dùng phiên bản mới nhất
             </p>
             <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-              Build {BUILD_ID}
+              {BUILD_TIME ? `Cập nhật ${BUILD_TIME}` : 'Chi Tiêu App'}
             </p>
-            {BUILD_TIME && (
-              <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                Cập nhật: {BUILD_TIME}
-              </p>
-            )}
+
           </div>
         </div>
       </div>

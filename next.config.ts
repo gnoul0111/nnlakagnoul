@@ -11,14 +11,17 @@ const withSerwist = withSerwistInit({
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   env: {
-    // Build info tu dong inject luc Vercel build — khong can Vercel CLI
-    // VERCEL_GIT_COMMIT_SHA: bien Vercel tu set, san co trong moi build
-    NEXT_PUBLIC_BUILD_ID: (process.env.VERCEL_GIT_COMMIT_SHA ?? 'local').slice(0, 7),
-    NEXT_PUBLIC_BUILD_TIME: (() => {
-      const d = new Date()
-      const pad = (n: number) => String(n).padStart(2, '0')
-      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-    })(),
+    // Build time inject luc Vercel build, dung timezone Viet Nam (Asia/Ho_Chi_Minh)
+    // new Date() tren Vercel server chay UTC → phai chi ro timezone khi format
+    NEXT_PUBLIC_BUILD_TIME: new Date().toLocaleString('vi-VN', {
+      timeZone:  'Asia/Ho_Chi_Minh',
+      day:       '2-digit',
+      month:     '2-digit',
+      year:      'numeric',
+      hour:      '2-digit',
+      minute:    '2-digit',
+      hour12:    false,
+    }),
   },
 }
 
