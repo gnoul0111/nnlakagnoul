@@ -81,7 +81,7 @@ export interface EventDoc {
    *   A.clientTimestamp="10:00:01", B.clientTimestamp="10:00:02"
    *   Sorted: A < B → B wins ✓
    */
-  clientTimestamp: string
+  clientTimestamp?: string
 
   /**
    * ISO string — for display / human-readable audit trail.
