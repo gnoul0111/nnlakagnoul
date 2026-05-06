@@ -27,6 +27,7 @@ function makeEvent(
     data,
     timestamp: makeTimestamp(seq * 1000),
     createdAt: new Date(seq * 1000).toISOString(),
+    clientTimestamp: new Date(seq * 1000).toISOString(),
   }
 }
 

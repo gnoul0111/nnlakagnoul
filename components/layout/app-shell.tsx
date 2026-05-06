@@ -31,7 +31,7 @@ export function AppShell({ children, title, topbarRight, banner, noPadding }: Ap
         {banner}
 
         <main className={cn(
-          'flex-1 overflow-y-auto overflow-x-hidden min-w-0',
+          'flex-1 overflow-y-auto overflow-x-hidden overscroll-contain min-w-0',
           !noPadding && 'p-3 sm:p-4 lg:p-6',
         )}>
           <div key={pathname} className="h-full">

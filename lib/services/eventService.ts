@@ -18,11 +18,17 @@ import type { EventDoc, EventDocInput } from '@/lib/types/events'
 const CLOCK_SKEW_BUFFER_MS = 30 * 1000
 
 // ─── Append event ─────────────────────────────────────────────────────────────
+//
+// FIX CONC-01: clientTimestamp từ input được GIỮ NGUYÊN, không bị overwrite.
+// Server chỉ thêm `timestamp` (Firestore Timestamp) cho incremental sync query.
+// Xem useAppend.ts — clientTimestamp được set tại thời điểm user thao tác.
 
 export async function appendEvent(input: EventDocInput): Promise<string> {
   const ref = collection(db, COLLECTIONS.EXPENSE_EVENTS)
   const docRef = await addDoc(ref, {
     ...input,
+    // Preserve clientTimestamp — never overwrite với server time
+    clientTimestamp: input.clientTimestamp ?? new Date().toISOString(),
     timestamp: Timestamp.now(),
     createdAt: new Date().toISOString(),
   })
@@ -66,23 +72,10 @@ export async function getNewEventsSince(
 
 // ─── Batch append (dùng khi flush offline queue) ─────────────────────────────
 //
-// FIX SYNC-01: Bản gốc dùng `const now = Timestamp.now()` một lần duy nhất
-// cho toàn bộ batch. Kết quả: tất cả events trong batch có CÙNG timestamp
-// trong Firestore.
+// FIX SYNC-01: mỗi event dùng createdAt riêng để derive Timestamp độc lập
+// → strictly-increasing, đảm bảo replay() xử lý đúng thứ tự.
 //
-// Vấn đề:
-//   - Firestore query `orderBy('timestamp', 'asc')` không có secondary sort key
-//     → khi nhiều events có cùng timestamp, thứ tự trả về là document-insertion
-//     order (Firestore internal), KHÔNG phải thứ tự logical của action.
-//   - Nếu Firestore trả về [DELETE, UPDATE, ADD] thay vì [ADD, UPDATE, DELETE]:
-//     replay() xử lý DELETE trước khi ADD → no-op → sau đó ADD tạo lại expense
-//     → expense xuất hiện lại dù đã xóa (silent data corruption).
-//   - Đây là lỗi intermittent: chỉ xảy ra khi Firestore trả về sai thứ tự,
-//     rất khó reproduce trong dev nhưng có thể xảy ra trong production.
-//
-// Fix: dùng `createdAt` của từng event (ISO string từ queuedAt lúc enqueue)
-// để derive một Timestamp riêng cho mỗi event, đảm bảo strictly-increasing.
-// Nếu createdAt bằng nhau (unlikely), thêm offset microsecond theo index.
+// FIX CONC-01: clientTimestamp từ input được giữ nguyên, không bị overwrite.
 
 export async function appendEventsBatch(inputs: EventDocInput[]): Promise<void> {
   const BATCH_SIZE = 400
@@ -91,26 +84,21 @@ export async function appendEventsBatch(inputs: EventDocInput[]): Promise<void> 
     const chunk = inputs.slice(i, i + BATCH_SIZE)
     await Promise.all(
       chunk.map((input, chunkIdx) => {
-        // FIX SYNC-01: derive a unique, strictly-increasing timestamp per event
-        // using the event's own createdAt field (set at enqueue time from queuedAt).
-        // This preserves the original chronological order of offline actions.
         const baseMs = input.createdAt
           ? new Date(input.createdAt).getTime()
           : Date.now()
 
-        // Add a sub-millisecond offset (in nanoseconds) by chunk position
-        // to guarantee strict ordering even when createdAt strings are identical.
-        const globalIdx = i + chunkIdx
+        const globalIdx   = i + chunkIdx
         const seconds     = Math.floor(baseMs / 1000)
-        const nanoseconds = (baseMs % 1000) * 1_000_000 + globalIdx * 1000  // +1µs per event
+        const nanoseconds = (baseMs % 1000) * 1_000_000 + globalIdx * 1000
 
         const timestamp = new Timestamp(seconds, nanoseconds)
 
         return addDoc(collection(db, COLLECTIONS.EXPENSE_EVENTS), {
           ...input,
+          // Preserve clientTimestamp — không overwrite
+          clientTimestamp: input.clientTimestamp ?? new Date(baseMs).toISOString(),
           timestamp,
-          // Preserve original createdAt from client — do NOT overwrite with server time
-          // so that the human-readable timestamp matches the Firestore sort key.
           createdAt: input.createdAt ?? new Date(baseMs).toISOString(),
         })
       }),

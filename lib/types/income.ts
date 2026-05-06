@@ -9,4 +9,5 @@ export interface Income {
 
   deleted?: boolean
   deletedAt?: string
+  _deletedClientTimestamp?: string
 }

@@ -8,4 +8,6 @@ export interface Template {
   amount: number
   note: string
   deleted?: boolean
+
+  _deletedClientTimestamp?: string
 }

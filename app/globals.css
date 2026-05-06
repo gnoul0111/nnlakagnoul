@@ -92,10 +92,10 @@
 
   html {
     -webkit-tap-highlight-color: transparent;
-    scroll-behavior: smooth;
-    /* iOS PWA: background color phu vao vung safe-area-top (status bar),
-       tranh khoang trang xuat hien khi app render lan dau */
     background-color: hsl(var(--background));
+    /* Chot html, body vao viewport — iOS rubber-band chi bi chặn khi body la fixed */
+    height: 100%;
+    overflow: hidden;
   }
 
   body {
@@ -103,8 +103,12 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Chong keo/drag toan bo trang tren iOS PWA (anh 2: keo man hinh len tren) */
-    overscroll-behavior: none;
+    /* position: fixed + inset: 0 = body bi chot cung vao viewport.
+       Day la cach DUY NHAT chong iOS rubber-band/overscroll tren PWA.
+       overscroll-behavior: none khong co tac dung tren iOS Safari/PWA. */
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
   }
 
   /* Số tiền input — chỉ numeric, không spinner */
@@ -138,11 +142,12 @@
     padding-top: env(safe-area-inset-top);
   }
 
-  /* iOS PWA height fix: dung -webkit-fill-available thay 100vh/100dvh
-     vi iOS Safari PWA tinh 100vh sai -> sinh white/black bar */
+  /* iOS PWA height fix:
+     Body la position:fixed + inset:0 → height = 100% se fill dung viewport.
+     Khong dung 100vh vi iOS PWA tinh sai, khong dung -webkit-fill-available
+     vi body da fixed roi. */
   .app-shell {
-    height: 100vh;
-    min-height: -webkit-fill-available;
+    height: 100%;
   }
 }
 

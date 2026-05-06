@@ -1,20 +1,40 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { useAuthStore } from '@/lib/store/authStore'
-import { useEventStore } from '@/lib/store/eventStore'
-import { appendEvent } from '@/lib/services/eventService'
-import { enqueueEvent } from '@/lib/offline/offlineQueue'
+import { useAuthStore }   from '@/lib/store/authStore'
+import { useEventStore }  from '@/lib/store/eventStore'
+import { appendEvent }    from '@/lib/services/eventService'
+import { enqueueEvent }   from '@/lib/offline/offlineQueue'
 import { useOnlineStatus } from './useOnlineStatus'
 import type { EventDocInput } from '@/lib/types/events'
 import { Timestamp } from 'firebase/firestore'
 
 /**
  * Hook để append event vào Firestore.
- * - Online: append thẳng rồi sync store
+ * - Online:  append thẳng rồi sync store
  * - Offline: enqueue vào localStorage, flush sau
  * - Optimistic update: cập nhật local state ngay lập tức
  * - Rollback: nếu appendEvent throw online → remove optimistic event khỏi cache
+ *
+ * FIX CONC-01: clientTimestamp được set NGAY TẠI ĐÂY, trước mọi network call.
+ *
+ * Vấn đề gốc:
+ *   appendEvent() gọi Timestamp.now() bên trong → server timestamp phụ thuộc
+ *   vào thời điểm Firestore nhận request, không phải thời điểm user thao tác.
+ *   Với 2 device có network latency khác nhau:
+ *     Device A acts T=10:00:01, slow network → Firestore ghi T=10:00:01.900
+ *     Device B acts T=10:00:02, fast network → Firestore ghi T=10:00:02.100
+ *   → Server order: A < B → B wins (correct ở trường hợp này)
+ *   Nhưng nếu:
+ *     Device A acts T=10:00:02 (LATER), slow → Firestore T=10:00:02.900
+ *     Device B acts T=10:00:01 (EARLIER), fast → Firestore T=10:00:01.100
+ *   → Server order: B(1.1) < A(2.9) → A wins (correct)... chỉ do may mắn
+ *   Nếu B fast hơn nữa: B → T=10:00:01.050, A → T=10:00:01.500
+ *   → Server order: B < A → A wins, nhưng B's action was LATER → SAI!
+ *
+ * Fix: clientTimestamp = new Date().toISOString() set tại useAppend(),
+ * không bao giờ bị overwrite bởi server. replay() dùng clientTimestamp
+ * làm primary sort key → LWW dựa trên INTENT time, không phải delivery time.
  */
 export function useAppend() {
   const user = useAuthStore(s => s.user)
@@ -30,11 +50,16 @@ export function useAppend() {
     ): Promise<'appended' | 'queued'> => {
       if (!user) throw new Error('Chưa đăng nhập.')
 
+      // FIX CONC-01: capture client time BEFORE any async operation.
+      // This is the authoritative "user intent" timestamp used for LWW.
+      const clientTimestamp = new Date().toISOString()
+
       const input: EventDocInput = {
-        userId: user.uid,
+        userId:   user.uid,
         eventType,
         data,
-        createdAt: new Date().toISOString(),
+        clientTimestamp,           // ← NEW: intent timestamp
+        createdAt: clientTimestamp, // reuse same value — they're the same at this point
       }
 
       // Optimistic update ngay lập tức
@@ -46,18 +71,16 @@ export function useAppend() {
       })
 
       if (!isOnline) {
-        enqueueEvent(input)
+        enqueueEvent(input) // clientTimestamp đi kèm vào queue → preserved on flush
         return 'queued'
       }
 
       setIsPending(true)
       try {
         await appendEvent(input)
-        // Sync delta để nhận confirmed id từ Firestore
         await syncEvents(user.uid)
         return 'appended'
       } catch (err) {
-        // Rollback optimistic event để UI không hiển thị data chưa commit
         removeLocalEvent(optimisticId)
         throw err
       } finally {

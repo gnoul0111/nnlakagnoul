@@ -17,22 +17,21 @@ export interface Goal {
   deposits: GoalDeposit[]
   deleted: boolean
   createdTimestamp: number // Unix seconds
+
+  _deletedClientTimestamp?: string
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Tính currentAmount thực từ deposits (không dùng field currentAmount) */
 export function computeGoalBalance(goal: Goal): number {
   return goal.deposits.reduce((sum, d) => sum + d.amount, 0)
 }
 
-/** % tiến độ */
 export function computeGoalProgress(goal: Goal): number {
   if (goal.targetAmount <= 0) return 0
   return Math.min(computeGoalBalance(goal) / goal.targetAmount, 1)
 }
 
-/** Số ngày còn đến deadline */
 export function daysUntilDeadline(goal: Goal, today: string): number | null {
   if (!goal.deadline) return null
   const t = new Date(today)

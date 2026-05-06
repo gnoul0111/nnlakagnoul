@@ -19,7 +19,7 @@ export interface Category {
   icon: string
 }
 
-// ─── Expense ─────────────────────────────────────────────────────────────────
+// ─── Expense ──────────────────────────────────────────────────────────────────
 
 export interface Expense {
   id: string
@@ -40,6 +40,14 @@ export interface Expense {
   // Soft delete
   deleted?: boolean
   deletedAt?: string
+
+  /**
+   * Tombstone timestamp — set bởi replay() khi xử lý EXPENSE_DELETED.
+   * Dùng để so sánh với EXPENSE_UPDATED.clientTimestamp trong conflict resolution.
+   * Không bao giờ được set từ UI — chỉ replay() ghi vào đây.
+   * Xem: replay.ts CONC-04 tombstone guard.
+   */
+  _deletedClientTimestamp?: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
