@@ -17,7 +17,7 @@ export interface Debt {
   name: string          // Tên người liên quan
   amount: number        // Tổng số nợ gốc
   type: DebtType
-  dueDate: string       // YYYY-MM-DD
+  dueDate: string | null // YYYY-MM-DD, null nếu không có hạn
   note: string
   paidAmount: number    // KHÔNG tin tưởng — luôn tính lại từ sum(payments)
   payments: DebtPayment[]

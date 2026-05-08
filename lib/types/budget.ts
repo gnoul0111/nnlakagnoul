@@ -35,7 +35,7 @@ export type BudgetAlertLevel = (typeof BUDGET_ALERT_LEVELS)[keyof typeof BUDGET_
 export function getBudgetAlertLevel(used: number, total: number): BudgetAlertLevel {
   if (total <= 0) return BUDGET_ALERT_LEVELS.OK
   const pct = used / total
-  if (pct > 1) return BUDGET_ALERT_LEVELS.OVER
+  if (pct >= 1) return BUDGET_ALERT_LEVELS.OVER    // FIX BUG-02: >= not > (exact 100% → OVER)
   if (pct > 0.9) return BUDGET_ALERT_LEVELS.DANGER
   if (pct > 0.7) return BUDGET_ALERT_LEVELS.WARNING
   return BUDGET_ALERT_LEVELS.OK

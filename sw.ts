@@ -15,23 +15,11 @@ const serwist = new Serwist({
   precacheEntries:  self.__SW_MANIFEST,
   skipWaiting:      true,   // Auto activate SW mới — UI update được handle bởi NetworkFirst
   clientsClaim:     true,
-
-  // SW-06 fix: tắt navigationPreload.
-  //
-  // Vấn đề: navigationPreload: true yêu cầu handler phải DÙNG event.preloadResponse.
-  // Serwist v9's NetworkFirst KHÔNG tự consume preloadResponse → browser cancel nó
-  // → warning "cancelled before preloadResponse settled" → wasted network request.
-  //
-  // Tại sao tắt là đúng với app này:
-  //   - App là SPA/PWA với Firebase Auth: mọi route đều render cùng 1 JS shell
-  //   - Content thực sự đến từ Firestore qua JS, không phải HTML response
-  //   - Preloaded HTML response không mang lại lợi ích gì, chỉ tốn băng thông
-  //   - Performance bottleneck là Firebase Auth init, không phải SW boot time
-  //
-  // Nếu sau này muốn bật lại: cần custom fetch handler await event.preloadResponse
-  // trước khi để Serwist xử lý — không thể làm qua runtimeCaching config thuần túy.
+  // navigationPreload: false — QUAN TRONG
+  // Neu true: Serwist v9's NetworkFirst KHONG tu tieu thu event.preloadResponse
+  // → browser cancel preload request → warning "no-response" tren moi navigation
+  // App nay la SPA/PWA: moi route tra ve cung 1 HTML shell, preload khong co ich
   navigationPreload: false,
-
   runtimeCaching: [
     // Firebase Firestore
     // SW-05 fix: giảm cache từ 24h xuống 5 phút
@@ -65,14 +53,11 @@ const serwist = new Serwist({
         ],
       }),
     },
-    // Navigation — NetworkFirst với offline fallback HTML
-    //
-    // Xử lý 2 trường hợp:
-    //   1. Online: fetch thành công → cache lại → trả về
-    //   2. Offline/lỗi: handlerDidError trả về trang offline thay vì reject
-    //      → không còn warning "FetchEvent ... promise rejected"
+    // Navigation fallback — tránh console warning "FetchEvent ... promise rejected"
+    // khi mạng fail VÀ cache miss (vd: page mới chưa precache, mạng chập chờn).
+    // handlerDidError luôn trả về 1 Response hợp lệ → handler không bao giờ reject.
     {
-      matcher: ({ request, url }: { request: Request; url: URL }) =>
+      matcher: ({ request, url }) =>
         request.mode === 'navigate' && url.origin === self.location.origin,
       handler: new NetworkFirst({
         cacheName:             'app-pages',
@@ -80,7 +65,7 @@ const serwist = new Serwist({
         plugins: [
           new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 7 * 24 * 60 * 60 }),
           {
-            handlerDidError: async (): Promise<Response> => new Response(
+            handlerDidError: async () => new Response(
               '<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8">' +
               '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">' +
               '<title>Offline — Chi Tiêu</title></head>' +

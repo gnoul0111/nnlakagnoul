@@ -13,7 +13,7 @@ export interface Goal {
   targetAmount: number
   // currentAmount KHÔNG tin tưởng — luôn tính lại từ sum(deposits)
   currentAmount: number
-  deadline: string       // YYYY-MM-DD
+  deadline: string | null // YYYY-MM-DD, null nếu không có deadline
   deposits: GoalDeposit[]
   deleted: boolean
   createdTimestamp: number // Unix seconds

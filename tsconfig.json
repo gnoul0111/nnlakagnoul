@@ -38,6 +38,11 @@
   ],
   "exclude": [
     "node_modules",
-    "functions"
+    "functions",
+    "e2e",
+    "playwright.config.ts",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }

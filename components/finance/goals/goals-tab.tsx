@@ -64,7 +64,7 @@ export function GoalsTab() {
   const df = useForm<DepositFormValues>({ resolver: zodResolver(depositSchema), defaultValues: { date: today() } })
 
   const openGoalEdit = (goal?: Goal) => {
-    if (goal) gf.reset({ name: goal.name, icon: goal.icon, targetAmount: String(goal.targetAmount), deadline: goal.deadline })
+    if (goal) gf.reset({ name: goal.name, icon: goal.icon, targetAmount: String(goal.targetAmount), deadline: goal.deadline ?? undefined })
     else gf.reset({ icon: '🎯', deadline: '' })
     setGoalForm({ open: true, edit: goal })
   }

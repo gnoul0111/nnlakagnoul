@@ -109,7 +109,7 @@ export function DebtsTab() {
   const totalLendRemaining   = lendActive.reduce((s, d) => s + computeRemaining(d), 0)
 
   const openDebtEdit = (debt?: Debt) => {
-    if (debt) df.reset({ name: debt.name, amount: String(debt.amount), type: debt.type, dueDate: debt.dueDate, note: debt.note })
+    if (debt) df.reset({ name: debt.name, amount: String(debt.amount), type: debt.type, dueDate: debt.dueDate ?? undefined, note: debt.note })
     else df.reset({ type: 'borrow', dueDate: '' })
     setDebtForm({ open: true, edit: debt })
   }

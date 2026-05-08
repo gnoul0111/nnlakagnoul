@@ -59,7 +59,7 @@ function DebtRow({ debt, type, moneyHidden, todayStr }: {
   todayStr: string
 }) {
   const remaining = computeRemaining(debt)
-  const diff = daysDiff(todayStr, debt.dueDate)
+  const diff = debt.dueDate ? daysDiff(todayStr, debt.dueDate) : null
   const isOverdue = type === 'overdue'
 
   return (
@@ -79,9 +79,11 @@ function DebtRow({ debt, type, moneyHidden, todayStr }: {
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground truncate">{debt.name}</p>
           <p className={cn('text-xs font-medium', isOverdue ? 'text-destructive' : 'text-warning')}>
-            {isOverdue
-              ? `Quá hạn ${Math.abs(diff)} ngày`
-              : diff === 0 ? 'Đến hạn hôm nay' : `Còn ${diff} ngày`
+            {diff === null
+              ? 'Không có ngày hạn'
+              : isOverdue
+                ? `Quá hạn ${Math.abs(diff)} ngày`
+                : diff === 0 ? 'Đến hạn hôm nay' : `Còn ${diff} ngày`
             }
           </p>
         </div>

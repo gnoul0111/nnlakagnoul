@@ -20,13 +20,21 @@ export function formatAmount(amount: number): string {
   }).format(amount)
 }
 
-/** Format compact: 1500000 → "1,5M" */
+/** Format compact: 1500000 → "1,5M"
+ *
+ *  FIX BUG-03: 999_999_999 / 1M = 999.999 → toFixed(1) = "1000.0" → was "1000M",
+ *  now correctly falls through to "1B".
+ *  FIX BUG-04: Use regex /\.0$/ to strip trailing .0 (string '.0' is fragile).
+ */
 export function formatCompact(amount: number): string {
   if (amount >= 1_000_000_000) {
-    return `${(amount / 1_000_000_000).toFixed(1).replace('.0', '')}B`
+    const s = (amount / 1_000_000_000).toFixed(1).replace(/\.0$/, '')
+    return `${s}B`
   }
   if (amount >= 1_000_000) {
-    return `${(amount / 1_000_000).toFixed(1).replace('.0', '')}M`
+    const raw = (amount / 1_000_000).toFixed(1)
+    if (raw === '1000.0') return '1B'              // BUG-03: boundary round-up
+    return `${raw.replace(/\.0$/, '')}M`          // BUG-04: regex replace
   }
   if (amount >= 1_000) {
     return `${(amount / 1_000).toFixed(0)}K`
