@@ -142,7 +142,7 @@ export function ExpensesTab() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">
-                        {(expense as any).title || expense.note || cat.label}
+                        {expense.title || expense.note || cat.label}
                       </p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-xs text-muted-foreground">{cat.label}</span>

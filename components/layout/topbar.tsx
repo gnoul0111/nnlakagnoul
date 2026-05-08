@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { LogOut, User, Moon, Sun } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuthStore } from '@/lib/store/authStore'
-import { useSettingsStore, selectTheme } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectTheme, selectProfilePhoto } from '@/lib/store/settingsStore'
 
 interface TopbarProps {
   title?: string
@@ -14,7 +14,7 @@ interface TopbarProps {
 
 export function Topbar({ title, right }: TopbarProps) {
   const user         = useAuthStore(s => s.user)
-  const profilePhoto = useSettingsStore(s => (s as any).profilePhoto as string | null)
+  const profilePhoto = useSettingsStore(selectProfilePhoto)
   const logout       = useAuthStore(s => s.logout)
   const theme        = useSettingsStore(selectTheme)
   const setTheme     = useSettingsStore(s => s.setTheme)

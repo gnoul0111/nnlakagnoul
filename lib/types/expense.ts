@@ -28,6 +28,7 @@ export interface Expense {
   category: CategoryValue
   date: string        // YYYY-MM-DD, local timezone
   note: string
+  title?: string          // optional display title (separate from note)
 
   // Linked transaction fields — khi có giá trị, loại khỏi budget calculation
   _debtId?: string | null

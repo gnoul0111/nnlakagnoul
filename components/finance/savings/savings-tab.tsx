@@ -77,7 +77,7 @@ export function SavingsTab() {
   const target         = savingsPlan?.targetAmount ?? 0
   const pct            = target > 0 ? Math.min(100, Math.round((totalDeposited / target) * 100)) : 0
 
-  const onDeposit = async (values: any) => {
+  const onDeposit = async (values: { amount: string; date: string; note?: string }) => {
     if (!user) return
     setSavingDeposit(true)
     try {
@@ -93,7 +93,7 @@ export function SavingsTab() {
     }
   }
 
-  const onWithdraw = async (values: any) => {
+  const onWithdraw = async (values: WithdrawValues) => {
     if (!user) return
     setSavingWithdraw(true)
     try {
@@ -110,7 +110,7 @@ export function SavingsTab() {
     }
   }
 
-  const onSetTarget = async (values: any) => {
+  const onSetTarget = async (values: { targetAmount: string }) => {
     if (!user) return
     try {
       await setSavingsTarget(user.uid, currentMonth, parseAmount(values.targetAmount))
@@ -244,7 +244,7 @@ export function SavingsTab() {
       {/* Deposit modal */}
       <Modal variant="center" open={depositOpen} onClose={() => setDepositOpen(false)} title="Nạp tiền tiết kiệm">
         <form onSubmit={df.handleSubmit(onDeposit)} className="px-4 pb-6 space-y-4">
-          <FormField label="Số tiền (₫)" error={(df.formState.errors as any).amount?.message} required>
+          <FormField label="Số tiền (₫)" error={df.formState.errors.amount?.message} required>
             <AmountInput placeholder="0" autoFocus {...df.register('amount')} />
           </FormField>
           <div className="grid grid-cols-2 gap-3">

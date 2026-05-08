@@ -68,7 +68,7 @@ export function DebtsTab() {
 
   // Normalize createdAt về ms — hỗ trợ cả Unix seconds lẫn ISO string
   function getCreatedMs(debt: Debt): number {
-    const v = (debt as any).createdAt
+    const v = debt.createdAt
     if (!v) return 0
     if (typeof v === 'number') {
       // Unix seconds nếu < 1e12, milliseconds nếu >= 1e12

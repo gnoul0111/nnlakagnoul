@@ -180,5 +180,6 @@ const EMPTY_CATEGORIES: CategoryValue[] = []
 
 export const selectMoneyHidden      = (s: SettingsStoreState) => s.settings?.moneyHidden ?? false
 export const selectTheme            = (s: SettingsStoreState) => s.settings?.theme ?? 'light'
+export const selectProfilePhoto     = (s: SettingsStoreState) => s.profilePhoto
 export const selectHiddenCategories = (s: SettingsStoreState) =>
   s.categoryPrefs?.hiddenCategories ?? EMPTY_CATEGORIES

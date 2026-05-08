@@ -8,7 +8,7 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { NAV_ITEMS, isNavItemActive } from './nav-items'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuthStore }     from '@/lib/store/authStore'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectProfilePhoto } from '@/lib/store/settingsStore'
 import { useNavStore, type NavStore } from '@/lib/store/navStore'
 import { cn } from '@/lib/utils/cn'
 
@@ -17,7 +17,7 @@ const COLLAPSE_KEY = 'chitieu_sidebar_collapsed'
 export function Sidebar() {
   const pathname = usePathname()
   const user         = useAuthStore(s => s.user)
-  const profilePhoto = useSettingsStore(s => (s as any).profilePhoto as string | null)
+  const profilePhoto = useSettingsStore(selectProfilePhoto)
   const pendingHref  = useNavStore((s: NavStore) => s.pendingHref)
   const setPending   = useNavStore((s: NavStore) => s.setPending)
   const router       = useRouter()

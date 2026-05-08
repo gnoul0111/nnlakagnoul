@@ -72,7 +72,7 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
         amount:   String(editExpense.amount),
         date:     editExpense.date,
         note:     editExpense.note,
-        title:    (editExpense as any).title ?? '',
+        title:    editExpense.title ?? '',
         category: editExpense.category,
       })
     } else if (copyFrom) {
@@ -80,7 +80,7 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
         amount:   String(copyFrom.amount),
         date:     today(),
         note:     copyFrom.note,
-        title:    (copyFrom as any).title ?? '',
+        title:    copyFrom.title ?? '',
         category: copyFrom.category,
       })
     } else {
