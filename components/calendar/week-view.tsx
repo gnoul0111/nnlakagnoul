@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils/cn'
 import { today, parseLocalDate, toLocalDateString, getWeekRange } from '@/lib/utils/date'
 import { useAppData } from '@/hooks/useAppData'
 import { formatCompact } from '@/lib/utils/currency'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
 import type { CalendarMode } from './calendar-header'
 
@@ -27,7 +27,7 @@ interface WeekViewProps {
 }
 
 export function WeekView({ anchor, mode, calendarEvents, selectedDate, onSelectDate }: WeekViewProps) {
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const { expenses, allIncomes } = useAppData()
   const todayStr = today()
 

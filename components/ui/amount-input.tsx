@@ -80,6 +80,13 @@ export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(
       const nativeGet = _nativeDesc.get
       const nativeSet = _nativeDesc.set
 
+      // FIX: Đọc native value TRƯỚC KHI cài setter.
+      // Khi reset() được gọi trước khi modal mở (AmountInput chưa mount),
+      // RHF set el.value = rawDigits qua native setter (chưa có setter tùy chỉnh).
+      // Sau khi mount, useEffect này chạy — nếu không đọc trước, native value
+      // "25000000" sẽ không bao giờ được format lại → input hiển thị số thô.
+      const existingNative = nativeGet.call(el)
+
       Object.defineProperty(el, 'value', {
         configurable: true,
 
@@ -101,6 +108,18 @@ export const AmountInput = forwardRef<HTMLInputElement, AmountInputProps>(
           nativeSet.call(el, format(digits))
         },
       })
+
+      // FIX: Sau khi setter được cài, re-format native value nếu cần.
+      // Scenario: RHF đã ghi "25000000" qua native setter trước khi useEffect này chạy.
+      // Lúc này existingNative = "25000000" (thô), cần format lại thành "25.000.000".
+      if (existingNative) {
+        const digits = toDigits(existingNative)
+        if (digits && format(digits) !== existingNative) {
+          rawRef.current = digits
+          setRaw(digits)
+          nativeSet.call(el, format(digits))
+        }
+      }
 
       return () => {
         try { delete (el as unknown as { value?: unknown }).value } catch { /* no-op */ }

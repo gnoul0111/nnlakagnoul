@@ -12,6 +12,7 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { useAppend } from '@/hooks/useAppend'
 import { useToast } from '@/hooks/useToast'
 import { useAuthStore } from '@/lib/store/authStore'
+import { useSettingsStore, selectHiddenCategories, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { newExpenseId, newIncomeId } from '@/lib/utils/id'
 import { today, getMonthFromDateString } from '@/lib/utils/date'
 import { CATEGORIES, type CategoryValue } from '@/lib/types/expense'
@@ -35,9 +36,11 @@ const dateSchema = z.string()
 const schema = z.object({
   amount:   amountSchema,
   note:     z.string().max(500, 'Ghi chú tối đa 500 ký tự.').optional(),
+  title:    z.string().max(100, 'Tiêu đề tối đa 100 ký tự.').optional(),
   date:     dateSchema,
   category: z.string().optional(),
-  source:   z.string().max(100, 'Nguồn thu tối đa 100 ký tự.').optional(),
+  // income: required để nhất quán với Finance module; fallback 'Thu nhập' nếu rỗng
+  source:   z.string().min(1, 'Nhập nguồn thu.').max(100, 'Nguồn thu tối đa 100 ký tự.').optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -54,8 +57,11 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
   const { append, isPending } = useAppend()
   const toast = useToast()
   const user  = useAuthStore(s => s.user)
+  const hiddenCategories = useSettingsStore(selectHiddenCategories)
   const [tab, setTab] = useState<TabType>(defaultTab)
   const [selectedCategory, setSelectedCategory] = useState<CategoryValue>('food')
+  // Dùng CATEGORIES đã lọc — nhất quán với ExpenseFormModal trong Finance module
+  const visibleCats = CATEGORIES.filter(c => !hiddenCategories.includes(c.value))
 
   // FIX defaultTab: useState chỉ dùng initial value 1 lần.
   // Nếu user bấm "Thu nhập" → đóng modal → bấm "Chi tiêu", tab phải reset lại đúng.
@@ -93,6 +99,7 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
         id: newExpenseId(),
         userId,
         amount,
+        title:    values.title ?? '',
         category: selectedCategory,
         date,
         note: values.note ?? '',
@@ -138,7 +145,7 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Danh mục</p>
             <div className="grid grid-cols-4 gap-2">
-              {CATEGORIES.map(cat => (
+              {visibleCats.map(cat => (
                 <button key={cat.value} type="button" onClick={() => setSelectedCategory(cat.value)}
                   className={cn(
                     'flex flex-col items-center gap-1 p-2 rounded-xl border text-xs font-medium transition-colors',
@@ -154,9 +161,15 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
           </div>
         )}
 
+        {tab === 'expense' && (
+          <FormField label="Tiêu đề" error={errors.title?.message}>
+            <Input placeholder="Tùy chọn (cà phê, xăng...)" {...register('title')} />
+          </FormField>
+        )}
+
         {tab === 'income' && (
-          <FormField label="Nguồn thu">
-            <Input placeholder="Lương, Freelance, ..." {...register('source')} />
+          <FormField label="Nguồn thu" error={errors.source?.message} required>
+            <Input placeholder="Lương, Freelance, ..." autoFocus {...register('source')} />
           </FormField>
         )}
 

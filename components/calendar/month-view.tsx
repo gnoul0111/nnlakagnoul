@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils/cn'
 import { today } from '@/lib/utils/date'
 import { useDailySpendingMap } from '@/hooks/useCalendarData'
 import { formatCompact } from '@/lib/utils/currency'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
 import type { CalendarMode } from './calendar-header'
 
@@ -30,7 +30,7 @@ interface MonthViewProps {
 export function MonthView({
   monthKey, mode, calendarEvents, selectedDate, onSelectDate,
 }: MonthViewProps) {
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const spendingMap = useDailySpendingMap(monthKey)
   const todayStr    = today()
 

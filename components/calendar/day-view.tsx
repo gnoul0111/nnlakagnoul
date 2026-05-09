@@ -3,7 +3,7 @@
 import { Pencil, Trash2, Clock, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { useDayFinanceData } from '@/hooks/useCalendarData'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { formatVND } from '@/lib/utils/currency'
 import { CATEGORIES } from '@/lib/types/expense'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
@@ -31,7 +31,7 @@ interface DayViewProps {
 export function DayView({
   dateStr, mode, calendarEvents, onEditEvent, onDeleteEvent,
 }: DayViewProps) {
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const {
     spendingExpenses, linkedExpenses, dayIncomes,
     totalSpending, totalIncome,

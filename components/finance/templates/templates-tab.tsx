@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { FormField, Input } from '@/components/ui/input'
 import { useAppData } from '@/hooks/useAppData'
 import { useAuthStore } from '@/lib/store/authStore'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { useSync } from '@/hooks/useSync'
 import { useToast } from '@/hooks/useToast'
 import { createTemplate, deleteTemplate, useTemplate } from '@/lib/services/templateService'
@@ -32,7 +32,7 @@ const catMap = Object.fromEntries(CATEGORIES.map(c => [c.value, c]))
 
 export function TemplatesTab() {
   const user        = useAuthStore(s => s.user)
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const sync        = useSync()
   const toast       = useToast()
   const { templates } = useAppData()

@@ -11,7 +11,7 @@ import { useMonthData }     from '@/hooks/useAppData'
 import { useCurrentMonth }  from '@/hooks/useCurrentMonth'
 import { useAppend }        from '@/hooks/useAppend'
 import { useToast }         from '@/hooks/useToast'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { CATEGORIES, isSavingsExpense, type Expense } from '@/lib/types/expense'
 import { EVENT_TYPES }      from '@/lib/types/events'
 import { formatMoney }      from '@/lib/utils/currency'
@@ -21,7 +21,7 @@ import { cn }               from '@/lib/utils/cn'
 const catMap = Object.fromEntries(CATEGORIES.map(c => [c.value, c]))
 
 export function ExpensesTab() {
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const { append }  = useAppend()
   const toast       = useToast()
 

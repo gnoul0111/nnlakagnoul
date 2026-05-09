@@ -16,7 +16,7 @@ import { CascadeModal } from '@/components/ui/cascade-modal'
 import { useMonthData, useAppData } from '@/hooks/useAppData'
 import { useCurrentMonth } from '@/hooks/useCurrentMonth'
 import { useAuthStore } from '@/lib/store/authStore'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { useAppend } from '@/hooks/useAppend'
 import { useSync } from '@/hooks/useSync'
 import { useToast } from '@/hooks/useToast'
@@ -51,7 +51,7 @@ const targetSchema = z.object({
 
 export function SavingsTab() {
   const user        = useAuthStore(s => s.user)
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const { appendOptimistic } = useAppend()
   const sync        = useSync()
   const toast       = useToast()

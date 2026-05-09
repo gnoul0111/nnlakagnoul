@@ -13,7 +13,7 @@ import { MonthPicker } from '@/components/dashboard/month-picker'
 import { useBudget } from '@/hooks/useBudget'
 import { useCurrentMonth } from '@/hooks/useCurrentMonth'
 import { useMonthData } from '@/hooks/useAppData'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { useAuthStore } from '@/lib/store/authStore'
 import { useToast } from '@/hooks/useToast'
 import { setBudget, getCategoryBudgets, setCategoryBudgets } from '@/lib/services/budgetService'
@@ -31,7 +31,7 @@ type FormValues = z.infer<typeof schema>
 
 export function BudgetTab() {
   const user        = useAuthStore(s => s.user)
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const toast       = useToast()
 
   const { currentMonth, goToPrevMonth, goToNextMonth, goToToday, isCurrentMonth } = useCurrentMonth()

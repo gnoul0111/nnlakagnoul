@@ -13,7 +13,7 @@ import { Modal, ConfirmModal } from '@/components/ui/modal'
 import { Progress } from '@/components/ui/progress'
 import { useAppData } from '@/hooks/useAppData'
 import { useAuthStore } from '@/lib/store/authStore'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { useAppend } from '@/hooks/useAppend'
 import { useSync } from '@/hooks/useSync'
 import { useToast } from '@/hooks/useToast'
@@ -46,7 +46,7 @@ const GOAL_ICONS = ['🎯', '🏠', '🚗', '✈️', '📱', '💻', '🎓', '�
 
 export function GoalsTab() {
   const user        = useAuthStore(s => s.user)
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const { appendOptimistic } = useAppend()
   const sync        = useSync()
   const toast       = useToast()

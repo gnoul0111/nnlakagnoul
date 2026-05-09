@@ -1,7 +1,7 @@
 'use client'
 
 import { usePeriodFinanceSummary } from '@/hooks/useCalendarData'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { formatVND } from '@/lib/utils/currency'
 import { cn } from '@/lib/utils/cn'
 
@@ -14,7 +14,7 @@ interface FinanceSummaryBarProps {
 
 export function FinanceSummaryBar({ start, end }: FinanceSummaryBarProps) {
   const { totalSpending, totalIncome, balance } = usePeriodFinanceSummary(start, end)
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const fmt = (n: number) => moneyHidden ? HIDDEN : formatVND(n)
 
   return (

@@ -86,7 +86,8 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
     } else {
       reset({ date: defaultDate ?? today(), category: 'food' })
     }
-  }, [editExpense, copyFrom, open])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editExpense, copyFrom, open, defaultDate])
 
   const onSubmit = async (values: FormValues) => {
     const amount = parseAmount(values.amount)

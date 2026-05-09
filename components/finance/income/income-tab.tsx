@@ -14,7 +14,8 @@ import { MonthPicker } from '@/components/dashboard/month-picker'
 import { useAppend } from '@/hooks/useAppend'
 import { useMonthData } from '@/hooks/useAppData'
 import { useCurrentMonth } from '@/hooks/useCurrentMonth'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useAuthStore } from '@/lib/store/authStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { useToast } from '@/hooks/useToast'
 import { EVENT_TYPES } from '@/lib/types/events'
 import { newIncomeId } from '@/lib/utils/id'
@@ -35,17 +36,21 @@ type FormValues = z.infer<typeof schema>
 
 function IncomeFormModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { append, isPending } = useAppend()
-  const toast = useToast()
+  const toast  = useToast()
+  const user   = useAuthStore(s => s.user)
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { date: today(), source: 'Lương' },
   })
 
   const onSubmit = async (values: FormValues) => {
-    const date = values.date
+    const date   = values.date
+    // userId BẮT BUỘC phải có trong data để ownership check hoạt động đúng
+    // (INCOME_DELETED kiểm tra state.incomes[idx].userId === event.userId)
+    const userId = user?.uid ?? ''
     try {
       await append(EVENT_TYPES.INCOME_ADDED, {
-        id: newIncomeId(), amount: parseAmount(values.amount),
+        id: newIncomeId(), userId, amount: parseAmount(values.amount),
         source: values.source, date,
         month: getMonthFromDateString(date), note: values.note ?? '',
       })
@@ -84,7 +89,7 @@ function IncomeFormModal({ open, onClose }: { open: boolean; onClose: () => void
 // ─── Tab ─────────────────────────────────────────────────────────────────────
 
 export function IncomeTab() {
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const { append }  = useAppend()
   const toast       = useToast()
 

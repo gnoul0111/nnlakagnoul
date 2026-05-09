@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { X, AlertTriangle } from 'lucide-react'
 import { useAppData }           from '@/hooks/useAppData'
 import { useBudget }            from '@/hooks/useBudget'
-import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { formatVND }            from '@/lib/utils/currency'
 import { thisMonth, today }     from '@/lib/utils/date'
 import { cn }                   from '@/lib/utils/cn'
@@ -36,7 +36,7 @@ export function BudgetAlertBanner() {
   const todayStr    = today()
   const { expenses } = useAppData()
   const { budget, isLoading } = useBudget(monthKey)
-  const moneyHidden = false
+  const moneyHidden = useSettingsStore(selectMoneyHidden)
   // Dismissed state — đọc từ localStorage sau khi mount (tránh hydration mismatch)
   const [dismissed, setDismissed] = useState(true)
   useEffect(() => {
