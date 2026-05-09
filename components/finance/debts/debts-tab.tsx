@@ -15,6 +15,7 @@ import { CascadeModal } from '@/components/ui/cascade-modal'
 import { useAppData } from '@/hooks/useAppData'
 import { useAuthStore } from '@/lib/store/authStore'
 import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useAppend } from '@/hooks/useAppend'
 import { useSync } from '@/hooks/useSync'
 import { useToast } from '@/hooks/useToast'
 import {
@@ -22,6 +23,7 @@ import {
   addDebtPayment, deleteDebtPayment,
   findLinkedExpenseIds, findPaymentLinkedExpense,
 } from '@/lib/services/debtService'
+import { newDebtId, newPaymentId } from '@/lib/utils/id'
 import { computePaidAmount, computeRemaining, isDebtSettled, isDebtOverdue, isDebtUpcoming } from '@/lib/types/debt'
 import type { Debt, DebtPayment } from '@/lib/types/debt'
 import { parseAmount, formatMoney, formatPercent } from '@/lib/utils/currency'
@@ -48,6 +50,7 @@ type PaymentFormValues = z.infer<typeof paymentSchema>
 export function DebtsTab() {
   const user        = useAuthStore(s => s.user)
   const moneyHidden = false
+  const { appendOptimistic } = useAppend()
   const sync        = useSync()
   const toast       = useToast()
   const { debts, expenses } = useAppData()
@@ -117,16 +120,51 @@ export function DebtsTab() {
   const onDebtSubmit = async (values: DebtFormValues) => {
     if (!user) return
     setSavingDebt(true)
+    const amount = parseAmount(values.amount)
+
+    // FIX PERF-03: Optimistic update
+    let rollback: (() => void) | null = null
+    let preDebtId: string | undefined
+
+    if (!debtForm.edit) {
+      // Add: pre-generate ID → dùng cùng ID ở service call để pruneReplacedOptimistic match
+      preDebtId = newDebtId()
+      rollback = appendOptimistic('DEBT_CREATED', {
+        id:          preDebtId,
+        userId:      user.uid,
+        name:        values.name,
+        amount,
+        type:        values.type,
+        dueDate:     values.dueDate ?? null,
+        note:        values.note ?? '',
+        paidAmount:  0,
+        payments:    [],
+        deleted:     false,
+        createdAt:   Math.floor(Date.now() / 1000),
+      }).rollback
+    } else {
+      // Update: chỉ cần delta fields
+      rollback = appendOptimistic('DEBT_UPDATED', {
+        id:      debtForm.edit.id,
+        name:    values.name,
+        amount,
+        dueDate: values.dueDate ?? null,
+        note:    values.note ?? '',
+      }).rollback
+    }
+
+    setDebtForm({ open: false })
+
     try {
       if (debtForm.edit) {
-        await updateDebt(user.uid, debtForm.edit.id, { name: values.name, amount: parseAmount(values.amount), dueDate: values.dueDate, note: values.note })
+        await updateDebt(user.uid, debtForm.edit.id, { name: values.name, amount, dueDate: values.dueDate, note: values.note })
       } else {
-        await addDebt(user.uid, { name: values.name, amount: parseAmount(values.amount), type: values.type, dueDate: values.dueDate, note: values.note })
+        await addDebt(user.uid, { id: preDebtId, name: values.name, amount, type: values.type, dueDate: values.dueDate, note: values.note })
       }
       await sync()
-      setDebtForm({ open: false })
       toast.success(debtForm.edit ? 'Đã cập nhật khoản nợ!' : 'Đã thêm khoản nợ!')
     } catch (err) {
+      rollback?.()
       console.error('[debts] submit failed:', err)
       toast.error('Không lưu được. Kiểm tra kết nối rồi thử lại.')
     } finally {
@@ -137,9 +175,6 @@ export function DebtsTab() {
   const onPaymentSubmit = async (values: PaymentFormValues) => {
     if (!user || !paymentFor) return
 
-    // Bug 1 fix: block trả > còn lại.
-    // computeRemaining đã tính paid từ payments array → luôn chính xác, kể cả
-    // nếu user đã thêm vài lần trả rồi.
     const amount = parseAmount(values.amount)
     const remaining = computeRemaining(paymentFor)
     if (amount > remaining) {
@@ -148,12 +183,28 @@ export function DebtsTab() {
     }
 
     setSavingPayment(true)
+    const paymentId = newPaymentId()
+    const date      = values.date
+
+    // FIX PERF-03: Optimistic payment update
+    const { rollback } = appendOptimistic('DEBT_PAYMENT_ADDED', {
+      debtId:  paymentFor.id,
+      payment: { id: paymentId, amount, date },
+    })
+
+    setPaymentFor(null)
+
     try {
-      await addDebtPayment(user.uid, paymentFor, { amount, date: values.date }, { addToExpenses })
+      await addDebtPayment(
+        user.uid,
+        paymentFor,
+        { paymentId, amount, date },
+        { addToExpenses },
+      )
       await sync()
-      setPaymentFor(null)
       toast.success('Đã thêm lần trả nợ!')
     } catch (err) {
+      rollback()
       console.error('[debts] payment failed:', err)
       toast.error('Không ghi được. Kiểm tra kết nối rồi thử lại.')
     } finally {

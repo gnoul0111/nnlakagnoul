@@ -17,12 +17,14 @@ import { useMonthData, useAppData } from '@/hooks/useAppData'
 import { useCurrentMonth } from '@/hooks/useCurrentMonth'
 import { useAuthStore } from '@/lib/store/authStore'
 import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useAppend } from '@/hooks/useAppend'
 import { useSync } from '@/hooks/useSync'
 import { useToast } from '@/hooks/useToast'
 import {
   setSavingsTarget, savingsDeposit, deleteSavingsDeposit,
   savingsWithdraw, deleteSavingsWithdrawal, findSavingsDepositExpense,
 } from '@/lib/services/savingsService'
+import { newDepositId, newWithdrawId } from '@/lib/utils/id'
 import {
   computeTotalDeposited, computeTotalWithdrawn, computeBalance,
 } from '@/lib/types/savings'
@@ -50,6 +52,7 @@ const targetSchema = z.object({
 export function SavingsTab() {
   const user        = useAuthStore(s => s.user)
   const moneyHidden = false
+  const { appendOptimistic } = useAppend()
   const sync        = useSync()
   const toast       = useToast()
 
@@ -80,12 +83,29 @@ export function SavingsTab() {
   const onDeposit = async (values: { amount: string; date: string; note?: string }) => {
     if (!user) return
     setSavingDeposit(true)
+    const amount    = parseAmount(values.amount)
+    const depositId = newDepositId()
+    const date      = values.date
+
+    // FIX PERF-03: Optimistic — UI cập nhật ngay, modal đóng ngay
+    const { rollback } = appendOptimistic('SAVINGS_DEPOSIT', {
+      monthKey: currentMonth,
+      deposit:  { id: depositId, amount, date, note: values.note ?? '', allocations: [] },
+    })
+
+    setDepositOpen(false)
+
     try {
-      await savingsDeposit(user.uid, currentMonth, { amount: parseAmount(values.amount), date: values.date, note: values.note }, { addToExpenses })
+      await savingsDeposit(
+        user.uid,
+        currentMonth,
+        { depositId, amount, date, note: values.note },
+        { addToExpenses },
+      )
       await sync()
-      setDepositOpen(false)
       toast.success('Đã nạp tiền tiết kiệm!')
     } catch (err) {
+      rollback()
       console.error('[savings] deposit failed:', err)
       toast.error('Không nạp được. Kiểm tra kết nối rồi thử lại.')
     } finally {
@@ -96,13 +116,42 @@ export function SavingsTab() {
   const onWithdraw = async (values: WithdrawValues) => {
     if (!user) return
     setSavingWithdraw(true)
+    const amount     = parseAmount(values.amount)
+    const withdrawId = newWithdrawId()
+    const date       = values.date
+    const goalObj    = values.type === 'goal' && values.goalId
+      ? activeGoals.find(g => g.id === values.goalId)
+      : null
+
+    // FIX PERF-03: Optimistic withdraw
+    // Lưu ý: nếu type='goal', goalDepositId sẽ được confirm khi sync() — không optimistic
+    // goal deposit để tránh hiện số tiền sai trên goal card trong thời gian chờ
+    const { rollback } = appendOptimistic('SAVINGS_WITHDRAWN', {
+      monthKey: currentMonth,
+      withdrawal: {
+        id:            withdrawId,
+        amount,
+        date,
+        reason:        values.reason ?? '',
+        type:          values.type,
+        goalId:        values.goalId || null,
+        goalDepositId: null,  // sẽ được fill đúng sau sync()
+      },
+    })
+
+    setWithdrawOpen(false)
+
     try {
-      const goalObj = values.type === 'goal' && values.goalId ? activeGoals.find(g => g.id === values.goalId) : null
-      await savingsWithdraw(user.uid, currentMonth, { amount: parseAmount(values.amount), date: values.date, reason: values.reason, type: values.type, goalId: values.goalId || null }, goalObj)
+      await savingsWithdraw(
+        user.uid,
+        currentMonth,
+        { withdrawalId: withdrawId, amount, date, reason: values.reason, type: values.type, goalId: values.goalId || null },
+        goalObj,
+      )
       await sync()
-      setWithdrawOpen(false)
       toast.success('Đã rút tiền tiết kiệm!')
     } catch (err) {
+      rollback()
       console.error('[savings] withdraw failed:', err)
       toast.error('Không rút được. Kiểm tra kết nối rồi thử lại.')
     } finally {

@@ -42,6 +42,54 @@ export function useAppend() {
   const isOnline = useOnlineStatus()
   const [isPending, setIsPending] = useState(false)
 
+  /**
+   * appendOptimistic — local-only, không write Firestore.
+   *
+   * FIX PERF-03: Dùng cho Goals/Savings/Debts write path.
+   * Thay vì chờ service → Firestore → sync() → replay() mới thấy kết quả,
+   * component gọi appendOptimistic() trước để cập nhật UI ngay lập tức.
+   * Service call vẫn chạy bình thường sau đó.
+   *
+   * Cơ chế rollback:
+   *   - Online: nếu Firestore write thành lỗi → gọi rollback() để removeLocalEvent
+   *   - sync() sau đó sẽ fetch confirmed event → pruneReplacedOptimistic() tự
+   *     xóa optimistic event (match bằng domain signature dựa trên data.id)
+   *
+   * Cơ chế consistency:
+   *   - Caller phải dùng CÙNG ID trong optimistic event và trong service call.
+   *     Ví dụ: pre-generate goalId = newGoalId(), truyền vào cả
+   *     appendOptimistic({ id: goalId, ... }) và addGoal({ id: goalId, ... }).
+   *   - pruneReplacedOptimistic match bằng domain signature GOAL_ADDED:${goalId}
+   *     → optimistic bị prune khi confirmed event arrive, tránh duplicate.
+   *
+   * @returns { rollback } — gọi rollback() để hoàn tác nếu service call fail
+   */
+  const appendOptimistic = useCallback(
+    (
+      eventType: EventDocInput['eventType'],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: Record<string, any>,
+    ): { rollback: () => void } => {
+      if (!user) return { rollback: () => {} }
+
+      const clientTimestamp = new Date().toISOString()
+      const optimisticId    = `optimistic_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+      appendLocalEvent({
+        id:               optimisticId,
+        userId:           user.uid,
+        eventType,
+        data,
+        clientTimestamp,
+        createdAt:        clientTimestamp,
+        timestamp:        Timestamp.now(),
+      })
+
+      return { rollback: () => removeLocalEvent(optimisticId) }
+    },
+    [user, appendLocalEvent, removeLocalEvent],
+  )
+
   const append = useCallback(
     async (
       eventType: EventDocInput['eventType'],
@@ -90,5 +138,5 @@ export function useAppend() {
     [user, isOnline, appendLocalEvent, removeLocalEvent, syncEvents],
   )
 
-  return { append, isPending }
+  return { append, appendOptimistic, isPending }
 }

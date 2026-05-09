@@ -14,10 +14,12 @@ import { Progress } from '@/components/ui/progress'
 import { useAppData } from '@/hooks/useAppData'
 import { useAuthStore } from '@/lib/store/authStore'
 import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useAppend } from '@/hooks/useAppend'
 import { useSync } from '@/hooks/useSync'
 import { useToast } from '@/hooks/useToast'
 import { addGoal, updateGoal, deleteGoal, addGoalDeposit, deleteGoalDeposit } from '@/lib/services/goalService'
 import { deleteExpense } from '@/lib/services/expenseService'
+import { newGoalId, newDepositId } from '@/lib/utils/id'
 import { computeGoalBalance, computeGoalProgress, daysUntilDeadline } from '@/lib/types/goal'
 import { CascadeModal } from '@/components/ui/cascade-modal'
 import { formatMoney, parseAmount, formatPercent } from '@/lib/utils/currency'
@@ -45,6 +47,7 @@ const GOAL_ICONS = ['🎯', '🏠', '🚗', '✈️', '📱', '💻', '🎓', '�
 export function GoalsTab() {
   const user        = useAuthStore(s => s.user)
   const moneyHidden = false
+  const { appendOptimistic } = useAppend()
   const sync        = useSync()
   const toast       = useToast()
   const { goals, expenses } = useAppData()
@@ -72,17 +75,53 @@ export function GoalsTab() {
   const onGoalSubmit = async (values: GoalFormValues) => {
     if (!user) return
     setSavingGoal(true)
+    const target = parseAmount(values.targetAmount)
+
+    // FIX PERF-03: Optimistic update — UI cập nhật ngay, không chờ Firestore
+    let rollback: (() => void) | null = null
+    if (goalForm.edit) {
+      // Update: chỉ cần delta
+      rollback = appendOptimistic('GOAL_UPDATED', {
+        id:           goalForm.edit.id,
+        name:         values.name,
+        icon:         values.icon,
+        targetAmount: target,
+        deadline:     values.deadline ?? null,
+      }).rollback
+    } else {
+      // Add: pre-generate ID để service dùng cùng ID → pruneReplacedOptimistic match đúng
+      const goalId = newGoalId()
+      ;(values as GoalFormValues & { _optimisticId?: string })._optimisticId = goalId
+      rollback = appendOptimistic('GOAL_ADDED', {
+        id:               goalId,
+        userId:           user.uid,
+        name:             values.name,
+        icon:             values.icon,
+        targetAmount:     target,
+        currentAmount:    0,
+        deadline:         values.deadline ?? null,
+        deposits:         [],
+        deleted:          false,
+        createdTimestamp: Math.floor(Date.now() / 1000),
+      }).rollback
+      // Gắn ID vào values để dùng trong service call bên dưới
+      ;(values as GoalFormValues & { _goalId?: string })._goalId = goalId
+    }
+
+    // Đóng modal ngay — user thấy kết quả tức thì
+    setGoalForm({ open: false })
+
     try {
-      const target = parseAmount(values.targetAmount)
       if (goalForm.edit) {
         await updateGoal(user.uid, goalForm.edit.id, { name: values.name, icon: values.icon, targetAmount: target, deadline: values.deadline })
       } else {
-        await addGoal(user.uid, { name: values.name, icon: values.icon, targetAmount: target, deadline: values.deadline })
+        const preId = (values as GoalFormValues & { _goalId?: string })._goalId
+        await addGoal(user.uid, { id: preId, name: values.name, icon: values.icon, targetAmount: target, deadline: values.deadline })
       }
       await sync()
-      setGoalForm({ open: false })
       toast.success(goalForm.edit ? 'Đã cập nhật mục tiêu!' : 'Đã tạo mục tiêu!')
     } catch (err) {
+      rollback?.()  // Hoàn tác optimistic nếu write thất bại
       console.error('[goals] submit failed:', err)
       toast.error('Không lưu được. Kiểm tra kết nối rồi thử lại.')
     } finally {
@@ -93,12 +132,28 @@ export function GoalsTab() {
   const onDepositSubmit = async (values: DepositFormValues) => {
     if (!user || !depositFor) return
     setSavingDeposit(true)
+    const amount    = parseAmount(values.amount)
+    const depositId = newDepositId()
+
+    // FIX PERF-03: Optimistic update ngay — modal đóng ngay lập tức
+    const { rollback } = appendOptimistic('GOAL_DEPOSIT_ADDED', {
+      goalId:  depositFor.id,
+      deposit: { id: depositId, amount, date: values.date, note: values.note ?? '' },
+    })
+
+    setDepositFor(null)
+
     try {
-      await addGoalDeposit(user.uid, depositFor, { amount: parseAmount(values.amount), date: values.date, note: values.note }, { addToExpenses })
+      await addGoalDeposit(
+        user.uid,
+        depositFor,
+        { depositId, amount, date: values.date, note: values.note },
+        { addToExpenses },
+      )
       await sync()
-      setDepositFor(null)
       toast.success('Đã nạp tiền vào mục tiêu!')
     } catch (err) {
+      rollback()
       console.error('[goals] deposit failed:', err)
       toast.error('Không nạp được. Kiểm tra kết nối rồi thử lại.')
     } finally {

@@ -25,6 +25,7 @@ export async function setSavingsTarget(
 // ─── Deposit ──────────────────────────────────────────────────────────────────
 
 export interface SavingsDepositInput {
+  depositId?: string  // Pre-generated ID cho optimistic update (optional)
   amount: number
   date?: string
   note?: string
@@ -45,7 +46,7 @@ export async function savingsDeposit(
   input: SavingsDepositInput,
   options: SavingsDepositOptions = { addToExpenses: true },
 ): Promise<{ depositId: string; linkedExpenseId: string | null }> {
-  const depositId = newDepositId()
+  const depositId = input.depositId ?? newDepositId()
   const date = input.date ?? today()
 
   const deposit: SavingsDeposit = {
@@ -153,6 +154,7 @@ export async function deleteAllocation(
 // ─── Withdrawal ───────────────────────────────────────────────────────────────
 
 export interface WithdrawInput {
+  withdrawalId?: string  // Pre-generated ID cho optimistic update (optional)
   amount: number
   date?: string
   reason?: string
@@ -173,7 +175,7 @@ export async function savingsWithdraw(
   input: WithdrawInput,
   currentGoal?: Goal | null,
 ): Promise<{ withdrawalId: string; goalDepositId: string | null }> {
-  const withdrawalId = newWithdrawId()
+  const withdrawalId = input.withdrawalId ?? newWithdrawId()
   const date = input.date ?? today()
   let goalDepositId: string | null = null
 

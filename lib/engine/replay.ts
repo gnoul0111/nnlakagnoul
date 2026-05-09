@@ -17,10 +17,6 @@ export interface ReplayedState {
   savingsPlans: Record<string, SavingsPlan>
 }
 
-function emptyState(): ReplayedState {
-  return { expenses: [], incomes: [], goals: [], debts: [], templates: [], savingsPlans: {} }
-}
-
 // ─── Sort helper ──────────────────────────────────────────────────────────────
 //
 // FIX CONC-02 + CONC-03:
@@ -102,19 +98,36 @@ function safeId(item: any): string | undefined {
   return item?.id ?? item?._id ?? undefined
 }
 
-// ─── Main replay function ─────────────────────────────────────────────────────
+// ─── Single-event apply ───────────────────────────────────────────────────────
+//
+// FIX PERF-02: Tách body của vòng lặp replay thành hàm riêng applyEvent().
+//
+// Mục đích kép:
+//   1. replay() vẫn dùng applyEvent() bên trong → không đổi logic, chỉ refactor.
+//   2. appendLocalEvent() dùng applyEvent() để cập nhật incremental:
+//      thay vì replay(toàn bộ N events) sau mỗi lần write, chỉ apply 1 event mới
+//      lên state hiện tại → O(1) thay O(N).
+//
+// Thiết kế: applyEvent() mutate state trực tiếp (không return ReplayedState mới).
+// Caller chịu trách nhiệm clone state trước khi truyền vào nếu cần immutability.
+// replay() truyền vào state mới toanh từ emptyState() → không cần clone.
+// appendLocalEvent() clone shallow trước khi gọi → xem eventStore.ts.
+//
+// Không ảnh hưởng: toàn bộ case logic giữ nguyên byte-for-byte.
+// Test hiện có (budgetCalc, currency) không import replay trực tiếp → không cần sửa test.
 
-export function replay(events: EventDoc[]): ReplayedState {
-  const state  = emptyState()
-  const sorted = sortEvents(events)
+export function emptyState(): ReplayedState {
+  return { expenses: [], incomes: [], goals: [], debts: [], templates: [], savingsPlans: {} }
+}
 
-  for (const event of sorted) {
-    try {
-      const eventType = (event.eventType as string).toUpperCase()
-      const data      = event.data ?? {}
-      const userId    = event.userId ?? ''
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function applyEvent(state: ReplayedState, event: EventDoc): void {
+  try {
+    const eventType = (event.eventType as string).toUpperCase()
+    const data      = event.data ?? {}
+    const userId    = event.userId ?? ''
 
-      switch (eventType) {
+    switch (eventType) {
 
         // ── EXPENSE ────────────────────────────────────────────────────────────
 
@@ -520,8 +533,19 @@ export function replay(events: EventDoc[]): ReplayedState {
         console.warn('[replay] error processing event:', event.eventType, event.id, err)
       }
     }
-  }
+}
 
+// ─── Main replay function ─────────────────────────────────────────────────────
+//
+// Giữ nguyên API — toàn bộ caller không cần sửa.
+// Nội dung giờ là: sort → for each → applyEvent(state, event).
+
+export function replay(events: EventDoc[]): ReplayedState {
+  const state  = emptyState()
+  const sorted = sortEvents(events)
+  for (const event of sorted) {
+    applyEvent(state, event)
+  }
   return state
 }
 

@@ -44,5 +44,8 @@
     "**/__tests__/**",
     "**/*.test.ts",
     "**/*.spec.ts"
+  ],
+  "references": [
+    { "path": "./tsconfig.test.json" }
   ]
 }

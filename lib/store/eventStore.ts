@@ -1,14 +1,40 @@
 import { create } from 'zustand'
 import { getAllEvents, getNewEventsSince } from '@/lib/services/eventService'
-import { replay, type ReplayedState } from '@/lib/engine/replay'
+import { replay, applyEvent, emptyState, type ReplayedState } from '@/lib/engine/replay'
 import type { EventDoc } from '@/lib/types/events'
 
 // ─── Cache constants ──────────────────────────────────────────────────────────
 
 const CACHE_KEY_PREFIX = 'chitieu_events_cache_'
 
-// FIX S-06: sessionStorage thay localStorage (xem comment gốc)
-const storage = typeof window !== 'undefined' ? sessionStorage : null
+// FIX PERF-01: Thay sessionStorage bằng IndexedDB.
+//
+// Vấn đề gốc (FIX S-06 cũ):
+//   sessionStorage bị xóa mỗi khi user đóng tab → mỗi lần mở lại = cold start
+//   = full Firestore fetch toàn bộ event log + replay() từ đầu.
+//   User bình thường đóng/mở tab nhiều lần/ngày → cold start nhiều lần/ngày.
+//
+// Fix: IndexedDB persist qua tab close, browser restart, chỉ mất khi user
+// xóa cache trình duyệt. Lần mở thứ 2 trở đi đọc từ IDB (~0ms) rồi background
+// sync delta — gần như instant.
+//
+// Trade-off:
+//   - readLocalCache là async (IDB không sync). loadEvents đã async → OK.
+//   - writeLocalCache / clearLocalCache là fire-and-forget async. In-memory
+//     store vẫn cập nhật đồng bộ nên UI không bao giờ chờ IDB write.
+//   - IDB dùng Structured Clone Algorithm — Firestore Timestamp objects được
+//     clone thành plain {seconds, nanoseconds}. getEventMs() đã dùng optional
+//     chaining ?.toMillis?.() → hoạt động đúng với cả hai dạng.
+//
+// Không ảnh hưởng:
+//   - Toàn bộ logic merge/sync/replay bên dưới — không đổi một dòng nào.
+//   - _syncChain mutex — vẫn giữ nguyên, không phụ thuộc storage layer.
+//   - offlineQueue — dùng localStorage riêng, không liên quan.
+//   - Settings/Budget store — dùng cache riêng, không liên quan.
+
+const IDB_DB_NAME    = 'chitieu_events_db'
+const IDB_STORE_NAME = 'events_cache'
+const IDB_VERSION    = 1
 
 interface CachePayload {
   events:   EventDoc[]
@@ -19,33 +45,65 @@ function getCacheKey(userId: string) {
   return `${CACHE_KEY_PREFIX}${userId}`
 }
 
-function readLocalCache(userId: string): CachePayload | null {
-  if (!storage) return null
+// Singleton IDB connection — mở một lần, tái dùng cho các request tiếp theo.
+let _dbPromise: Promise<IDBDatabase> | null = null
+
+function openIDB(): Promise<IDBDatabase> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('SSR'))
+  if (_dbPromise) return _dbPromise
+  _dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open(IDB_DB_NAME, IDB_VERSION)
+    req.onupgradeneeded = () => {
+      // Tạo object store nếu chưa có (chạy khi lần đầu mở hoặc version tăng)
+      if (!req.result.objectStoreNames.contains(IDB_STORE_NAME)) {
+        req.result.createObjectStore(IDB_STORE_NAME)
+      }
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror   = () => {
+      _dbPromise = null // reset để retry lần sau
+      reject(req.error)
+    }
+  })
+  return _dbPromise
+}
+
+async function readLocalCache(userId: string): Promise<CachePayload | null> {
   try {
-    const raw = storage.getItem(getCacheKey(userId))
-    return raw ? (JSON.parse(raw) as CachePayload) : null
+    const db    = await openIDB()
+    const tx    = db.transaction(IDB_STORE_NAME, 'readonly')
+    const store = tx.objectStore(IDB_STORE_NAME)
+    return await new Promise<CachePayload | null>((resolve, reject) => {
+      const req = store.get(getCacheKey(userId))
+      req.onsuccess = () => resolve((req.result as CachePayload) ?? null)
+      req.onerror   = () => reject(req.error)
+    })
   } catch {
     return null
   }
 }
 
+// Fire-and-forget: UI không cần chờ IDB write hoàn tất.
+// In-memory store (Zustand) đã được cập nhật đồng bộ trước đó.
 function writeLocalCache(userId: string, payload: CachePayload): void {
-  if (!storage) return
-  try {
-    storage.setItem(getCacheKey(userId), JSON.stringify(payload))
-  } catch (e) {
-    console.warn('[EventStore] sessionStorage write failed:', e)
-    try {
-      storage.removeItem(getCacheKey(userId))
-      storage.setItem(getCacheKey(userId), JSON.stringify(payload))
-    } catch {
-      // Quota quá nhỏ — in-memory vẫn hoạt động
-    }
-  }
+  openIDB().then(db => {
+    const tx    = db.transaction(IDB_STORE_NAME, 'readwrite')
+    const store = tx.objectStore(IDB_STORE_NAME)
+    store.put(payload, getCacheKey(userId))
+  }).catch(e => {
+    console.warn('[EventStore] IDB write failed:', e)
+  })
 }
 
+// Fire-and-forget: xóa cache không cần await.
 function clearLocalCache(userId: string): void {
-  storage?.removeItem(getCacheKey(userId))
+  openIDB().then(db => {
+    const tx    = db.transaction(IDB_STORE_NAME, 'readwrite')
+    const store = tx.objectStore(IDB_STORE_NAME)
+    store.delete(getCacheKey(userId))
+  }).catch(() => {
+    // silent — in-memory đã được clear trước đó
+  })
 }
 
 // ─── Sync mutex ───────────────────────────────────────────────────────────────
@@ -145,8 +203,8 @@ export const useEventStore = create<EventStoreState>((set, get) => {
         return
       }
 
-      // Tầng 2: sessionStorage cache
-      const localCache = readLocalCache(userId)
+      // Tầng 2: IndexedDB cache (persist qua tab close)
+      const localCache = await readLocalCache(userId)
       if (localCache && localCache.events.length > 0) {
         const staleState = replay(localCache.events)
         set({
@@ -217,16 +275,39 @@ export const useEventStore = create<EventStoreState>((set, get) => {
     },
 
     appendLocalEvent: (event: EventDoc) => {
-      const { _eventsCache, _currentUserId, _lastSync } = get()
+      const { _eventsCache, _currentUserId, _lastSync, replayedState } = get()
       if (!_eventsCache || !_currentUserId) return
 
-      const merged        = mergeEvents(_eventsCache, [event])
-      const replayedState = replay(merged)
+      const merged = mergeEvents(_eventsCache, [event])
+
+      // FIX PERF-02: Incremental state update — chỉ apply event mới nhất lên
+      // state hiện tại, thay vì replay() toàn bộ N events từ đầu.
+      //
+      // Tại sao an toàn:
+      //   - appendLocalEvent() chỉ được gọi từ useAppend() với clientTimestamp
+      //     = now() → event mới luôn là event mới nhất về mặt thời gian.
+      //   - Với optimistic events (prefix 'optimistic_'), thứ tự chronological
+      //     là đúng vì user vừa tạo chúng.
+      //   - syncEvents() và loadEvents() vẫn dùng replay() đầy đủ → state
+      //     luôn được reconcile đúng sau mỗi lần sync với Firestore.
+      //
+      // Shallow clone để tránh mutate state cũ (savingsPlans cần deep clone
+      // vì applyEvent có thể mutate plan.deposits[]):
+      const base = replayedState ?? emptyState()
+      const newState: ReplayedState = {
+        expenses:     [...base.expenses],
+        incomes:      [...base.incomes],
+        goals:        [...base.goals],
+        debts:        [...base.debts],
+        templates:    [...base.templates],
+        savingsPlans: structuredClone(base.savingsPlans),
+      }
+      applyEvent(newState, event)
 
       if (_lastSync !== null) {
         writeLocalCache(_currentUserId, { events: merged, lastSync: _lastSync })
       }
-      set({ _eventsCache: merged, replayedState })
+      set({ _eventsCache: merged, replayedState: newState })
     },
 
     removeLocalEvent: (eventId: string) => {

@@ -8,6 +8,7 @@ import { today } from '@/lib/utils/date'
 // ─── Goal CRUD ────────────────────────────────────────────────────────────────
 
 export interface AddGoalInput {
+  id?: string        // Pre-generated ID cho optimistic update (optional — service tạo mới nếu không có)
   name: string
   icon: string
   targetAmount: number
@@ -15,7 +16,7 @@ export interface AddGoalInput {
 }
 
 export async function addGoal(userId: string, input: AddGoalInput): Promise<string> {
-  const id = newGoalId()
+  const id = input.id ?? newGoalId()
 
   await appendEvent({
     userId,
@@ -70,6 +71,7 @@ export async function deleteGoal(userId: string, goalId: string): Promise<void> 
 // ─── Deposit management ───────────────────────────────────────────────────────
 
 export interface AddDepositInput {
+  depositId?: string  // Pre-generated ID cho optimistic update (optional)
   amount: number
   date?: string
   note?: string
@@ -98,7 +100,7 @@ export async function addGoalDeposit(
   input: AddDepositInput,
   options: AddDepositOptions = {},
 ): Promise<{ depositId: string; linkedExpenseId: string | null }> {
-  const depositId = newDepositId()
+  const depositId = input.depositId ?? newDepositId()
   const date = input.date ?? today()
 
   const newDeposit: GoalDeposit = {

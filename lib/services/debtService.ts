@@ -8,6 +8,7 @@ import { today } from '@/lib/utils/date'
 // ─── Debt CRUD ────────────────────────────────────────────────────────────────
 
 export interface AddDebtInput {
+  id?: string        // Pre-generated ID cho optimistic update (optional)
   name: string
   amount: number
   type: DebtType
@@ -16,7 +17,7 @@ export interface AddDebtInput {
 }
 
 export async function addDebt(userId: string, input: AddDebtInput): Promise<string> {
-  const id = newDebtId()
+  const id = input.id ?? newDebtId()
 
   await appendEvent({
     userId,
@@ -90,6 +91,7 @@ export async function deleteDebt(
 // ─── Payment management ───────────────────────────────────────────────────────
 
 export interface AddPaymentInput {
+  paymentId?: string  // Pre-generated ID cho optimistic update (optional)
   amount: number
   date?: string
 }
@@ -113,7 +115,7 @@ export async function addDebtPayment(
   input: AddPaymentInput,
   options: AddPaymentOptions = {},
 ): Promise<{ paymentId: string; linkedExpenseId: string | null }> {
-  const paymentId = newPaymentId()
+  const paymentId = input.paymentId ?? newPaymentId()
   const date = input.date ?? today()
 
   const newPayment: DebtPayment = {
