@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Offline — Chi Tiêu</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0 }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #fafafa; color: #0a0a0a;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100dvh; padding: 24px;
+    }
+    .card {
+      text-align: center; max-width: 320px; width: 100%;
+    }
+    .icon { font-size: 64px; margin-bottom: 16px }
+    h1 { font-size: 20px; margin-bottom: 8px }
+    p  { font-size: 14px; color: #71717a; margin-bottom: 24px; line-height: 1.5 }
+    button {
+      padding: 10px 20px; border-radius: 10px; border: none;
+      background: #0a0a0a; color: white; font-size: 14px;
+      font-weight: 500; cursor: pointer; width: 100%;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #0a0a0a; color: #fafafa }
+      p    { color: #a1a1aa }
+      button { background: #fafafa; color: #0a0a0a }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📡</div>
+    <h1>Không có kết nối</h1>
+    <p>Kết nối mạng bị gián đoạn.<br>Hãy kiểm tra mạng rồi thử lại.</p>
+    <button onclick="location.reload()">Tải lại</button>
+  </div>
+</body>
+</html>

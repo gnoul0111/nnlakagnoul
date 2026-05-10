@@ -9,22 +9,15 @@ declare global {
 }
 declare const self: ServiceWorkerGlobalScope
 
-// skipWaiting: true → SW mới tự activate, không cần message từ UI
-
 const serwist = new Serwist({
-  precacheEntries:  self.__SW_MANIFEST,
-  skipWaiting:      true,   // Auto activate SW mới — UI update được handle bởi NetworkFirst
-  clientsClaim:     true,
-  // navigationPreload: false — QUAN TRONG
-  // Neu true: Serwist v9's NetworkFirst KHONG tu tieu thu event.preloadResponse
-  // → browser cancel preload request → warning "no-response" tren moi navigation
-  // App nay la SPA/PWA: moi route tra ve cung 1 HTML shell, preload khong co ich
+  // Thêm /offline.html vào precache để PrecacheFallbackPlugin có thể serve khi offline.
+  // __SW_MANIFEST chứa các static assets do Next.js build, không include file public/ thủ công.
+  precacheEntries:   [...(self.__SW_MANIFEST ?? []), '/offline.html'],
+  skipWaiting:       true,
+  clientsClaim:      true,
   navigationPreload: false,
   runtimeCaching: [
     // Firebase Firestore
-    // SW-05 fix: giảm cache từ 24h xuống 5 phút
-    // 24h quá dài cho financial data — user xóa expense → đi offline → vẫn thấy data cũ
-    // 5 phút là tradeoff hợp lý: offline vẫn hoạt động, data không quá stale
     {
       matcher: /^https:\/\/firestore\.googleapis\.com\/.*/i,
       handler: new NetworkFirst({
@@ -53,35 +46,44 @@ const serwist = new Serwist({
         ],
       }),
     },
-    // Navigation fallback — tránh console warning "FetchEvent ... promise rejected"
-    // khi mạng fail VÀ cache miss (vd: page mới chưa precache, mạng chập chờn).
-    // handlerDidError luôn trả về 1 Response hợp lệ → handler không bao giờ reject.
+    // FIX SW-NAVFAIL: Navigation handler cho SPA routes (/finance, /analytics, v.v.)
+    //
+    // Vấn đề gốc: Serwist v9 kiểm tra precache manifest trước runtimeCaching.
+    // /finance không có trong __SW_MANIFEST → không match precache → Serwist
+    // reject FetchEvent → lỗi "no-response" trên console.
+    //
+    // Fix: Đăng ký NavigationRoute tường minh với NetworkFirst.
+    // - Online: fetch từ network (luôn ra HTML shell mới nhất từ Vercel)
+    // - Offline + cache hit: serve từ app-pages cache
+    // - Offline + cache miss: PrecacheFallbackPlugin serve /offline.html
+    //   (đã được precache qua fallbacks.entries ở trên)
+    //
+    // navigateFallbackAllowlist: loại trừ _next/, api/, static assets
+    // để không intercept những request không phải app route.
     {
-      matcher: ({ request, url }) =>
-        request.mode === 'navigate' && url.origin === self.location.origin,
+      matcher: ({ request, url }: { request: Request; url: URL }) =>
+        request.mode === 'navigate' &&
+        url.origin === self.location.origin &&
+        !url.pathname.startsWith('/_next/') &&
+        !url.pathname.startsWith('/api/') &&
+        !url.pathname.startsWith('/icons/') &&
+        url.pathname !== '/manifest.json' &&
+        url.pathname !== '/sw.js' &&
+        url.pathname !== '/firebase-messaging-sw.js',
       handler: new NetworkFirst({
-        cacheName:             'app-pages',
+        cacheName:             'app-navigation',
         networkTimeoutSeconds: 5,
         plugins: [
           new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 7 * 24 * 60 * 60 }),
+          // Offline fallback: khi cả network lẫn cache đều fail → trả offline.html
+          // Dùng handlerDidError trực tiếp thay vì PrecacheFallbackPlugin
+          // vì plugin đó yêu cầu serwist instance (circular ref khi khởi tạo).
           {
-            handlerDidError: async () => new Response(
-              '<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8">' +
-              '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">' +
-              '<title>Offline — Chi Tiêu</title></head>' +
-              '<body style="margin:0;font-family:system-ui,-apple-system,sans-serif;' +
-              'padding:40px 24px;text-align:center;background:#fafafa;color:#0a0a0a">' +
-              '<div style="max-width:320px;margin:20vh auto">' +
-              '<div style="font-size:64px;margin-bottom:16px">📡</div>' +
-              '<h1 style="font-size:20px;margin:0 0 8px">Không có kết nối</h1>' +
-              '<p style="font-size:14px;color:#71717a;margin:0 0 24px">' +
-              'Kết nối mạng bị gián đoạn. Hãy kiểm tra mạng rồi thử lại.</p>' +
-              '<button onclick="location.reload()" style="padding:10px 20px;' +
-              'border-radius:10px;border:none;background:#0a0a0a;color:white;' +
-              'font-size:14px;font-weight:500;cursor:pointer">Tải lại</button>' +
-              '</div></body></html>',
-              { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
-            ),
+            handlerDidError: async () => {
+              const cache = await caches.open('serwist-precache-v2')
+              const resp  = await cache.match('/offline.html')
+              return resp ?? new Response('Offline', { status: 503 })
+            },
           },
         ],
       }),
