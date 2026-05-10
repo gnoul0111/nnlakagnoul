@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app'
+import { initializeApp, getApps, getApp, setLogLevel, type FirebaseApp } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
 import { getFirestore, type Firestore } from 'firebase/firestore'
 import { getMessaging, isSupported, type Messaging } from 'firebase/messaging'
@@ -21,6 +21,13 @@ const firebaseConfig = {
 
 // Singleton — tránh init nhiều lần khi Next.js hot reload
 const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig)
+
+// Tắt Firebase info/debug logs trên production.
+// "[AppCheck] Initialized with reCAPTCHA Enterprise" là info log — không cần thiết cho user.
+// 'error' chỉ giữ lại lỗi thực sự, bỏ info/warn/debug.
+if (process.env.NODE_ENV === 'production') {
+  setLogLevel('error')
+}
 
 // PERF FIX: Defer initAppCheck() ra khỏi critical render path.
 //

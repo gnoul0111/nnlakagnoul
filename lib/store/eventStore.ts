@@ -91,6 +91,10 @@ function writeLocalCache(userId: string, payload: CachePayload): void {
     const store = tx.objectStore(IDB_STORE_NAME)
     store.put(payload, getCacheKey(userId))
   }).catch(e => {
+    // InvalidStateError: "The database connection is closing" — xảy ra khi
+    // trang đang unload (đóng tab, navigate đi). Đây là behavior bình thường,
+    // không cần log ra console vì in-memory store vẫn nhất quán.
+    if (e?.name === 'InvalidStateError') return
     console.warn('[EventStore] IDB write failed:', e)
   })
 }
@@ -101,8 +105,9 @@ function clearLocalCache(userId: string): void {
     const tx    = db.transaction(IDB_STORE_NAME, 'readwrite')
     const store = tx.objectStore(IDB_STORE_NAME)
     store.delete(getCacheKey(userId))
-  }).catch(() => {
-    // silent — in-memory đã được clear trước đó
+  }).catch(e => {
+    // Tương tự writeLocalCache — ignore InvalidStateError khi page unload
+    if (e?.name === 'InvalidStateError') return
   })
 }
 

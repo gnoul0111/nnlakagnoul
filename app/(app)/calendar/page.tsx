@@ -188,8 +188,11 @@ export default function CalendarPage() {
       {/* ── Main content: calendar + optional inline detail ─────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
 
-        {/* Calendar grid — shrinks when detail panel is open */}
-        <div className={detailDate && (view === 'month' || view === 'week') ? 'shrink-0' : 'flex-1 overflow-hidden'}>
+        {/* Calendar grid — shrinks + capped height khi detail panel mở để panel có chỗ scroll */}
+        <div className={detailDate && (view === 'month' || view === 'week')
+          ? 'shrink-0 overflow-hidden max-h-[52vh]'
+          : 'flex-1 overflow-hidden'
+        }>
           {view === 'month' && (
             <MonthView
               monthKey={anchor.slice(0, 7)} mode={mode}
@@ -267,10 +270,11 @@ export default function CalendarPage() {
         )}
       </div>
 
-      {/* FAB */}
+      {/* FAB — vị trí khớp với Dashboard FAB, tính safe-area-inset cho iPhone */}
       <button
         onClick={handleFAB}
-        className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all z-40"
+        className="fixed right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all z-40"
+        style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom) + 0.75rem)' }}
         aria-label={mode === 'events' ? 'Thêm sự kiện' : 'Thêm chi tiêu'}
       >
         <Plus className="w-6 h-6" />
