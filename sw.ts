@@ -10,9 +10,9 @@ declare global {
 declare const self: ServiceWorkerGlobalScope
 
 const serwist = new Serwist({
-  // Thêm /offline.html vào precache để PrecacheFallbackPlugin có thể serve khi offline.
-  // __SW_MANIFEST chứa các static assets do Next.js build, không include file public/ thủ công.
-  precacheEntries:   [...(self.__SW_MANIFEST ?? []), '/offline.html'],
+  // KHÔNG thêm /offline.html thủ công — file này nằm trong public/ nên
+  // Serwist tự đưa vào __SW_MANIFEST với revision hash. Thêm tay = duplicate entry → SW crash.
+  precacheEntries:   self.__SW_MANIFEST,
   skipWaiting:       true,
   clientsClaim:      true,
   navigationPreload: false,
@@ -75,13 +75,12 @@ const serwist = new Serwist({
         networkTimeoutSeconds: 5,
         plugins: [
           new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 7 * 24 * 60 * 60 }),
-          // Offline fallback: khi cả network lẫn cache đều fail → trả offline.html
-          // Dùng handlerDidError trực tiếp thay vì PrecacheFallbackPlugin
-          // vì plugin đó yêu cầu serwist instance (circular ref khi khởi tạo).
           {
             handlerDidError: async () => {
+              // /offline.html được precache với revision hash (?_WB_REVISION_=xxx).
+              // ignoreSearch: true → match URL bỏ qua query string → tìm được đúng entry.
               const cache = await caches.open('serwist-precache-v2')
-              const resp  = await cache.match('/offline.html')
+              const resp  = await cache.match('/offline.html', { ignoreSearch: true })
               return resp ?? new Response('Offline', { status: 503 })
             },
           },
