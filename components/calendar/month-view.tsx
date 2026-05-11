@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils/cn'
 import { today } from '@/lib/utils/date'
 import { useDailySpendingMap } from '@/hooks/useCalendarData'
 import { formatCompact } from '@/lib/utils/currency'
-import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
+import { useSettingsStore } from '@/lib/store/settingsStore'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
 import type { CalendarMode } from './calendar-header'
 
@@ -30,7 +30,7 @@ interface MonthViewProps {
 export function MonthView({
   monthKey, mode, calendarEvents, selectedDate, onSelectDate,
 }: MonthViewProps) {
-  const moneyHidden = useSettingsStore(selectMoneyHidden)
+  const moneyHidden = false
   const spendingMap = useDailySpendingMap(monthKey)
   const todayStr    = today()
 
@@ -59,8 +59,8 @@ export function MonthView({
   }, [calendarEvents, monthKey])
 
   return (
-    <div className="flex-1 overflow-auto">
-      {/* Weekday headers */}
+    <div>
+      {/* Weekday headers — sticky relative to parent scroll container */}
       <div className="grid grid-cols-7 border-b border-border sticky top-0 bg-card z-10">
         {WEEKDAY_HEADERS.map(d => (
           <div key={d} className="py-2 text-center text-[11px] font-medium text-muted-foreground">

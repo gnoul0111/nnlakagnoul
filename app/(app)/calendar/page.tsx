@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { Plus, X } from 'lucide-react'
+import { cn } from '@/lib/utils/cn'
 import {
   CalendarHeader,
   type CalendarMode,
@@ -95,7 +96,8 @@ export default function CalendarPage() {
   const [anchor, setAnchor] = useState(today)
 
   // Selected date for inline detail panel
-  const [detailDate, setDetailDate] = useState<string | null>(null)
+  const [detailDate, setDetailDate]   = useState<string | null>(null)
+  const [fabExpanded, setFabExpanded] = useState(false)
 
   const [eventModal,   setEventModal]   = useState<{ open: boolean; date?: string; editEvent?: WorkCalendarEvent | null }>({ open: false })
   const [expenseModal, setExpenseModal] = useState<{ open: boolean; date?: string }>({ open: false })
@@ -185,14 +187,14 @@ export default function CalendarPage() {
 
       {mode === 'finance' && <FinanceSummaryBar start={start} end={end} />}
 
-      {/* ── Main content: calendar + optional inline detail ─────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Calendar grid — shrinks + capped height khi detail panel mở để panel có chỗ scroll */}
-        <div className={detailDate && (view === 'month' || view === 'week')
-          ? 'shrink-0 overflow-hidden max-h-[52vh]'
-          : 'flex-1 overflow-hidden'
-        }>
+      {/* ── Main content: single scroll container ────────────────────────────
+          Toàn bộ calendar + detail panel nằm trong 1 overflow-y-auto duy nhất.
+          User scroll tự nhiên từ trên xuống — không cần split viewport.
+          DayView và YearView giữ nguyên flex-1 overflow-hidden (không cần scroll ngoài).
+      ────────────────────────────────────────────────────────────────────── */}
+      {(view === 'month' || view === 'week') ? (
+        <div className="flex-1 overflow-y-auto">
+          {/* Calendar grid — natural height, không overflow-hidden */}
           {view === 'month' && (
             <MonthView
               monthKey={anchor.slice(0, 7)} mode={mode}
@@ -207,6 +209,48 @@ export default function CalendarPage() {
               onSelectDate={handleSelectDate}
             />
           )}
+
+          {/* Inline day detail — nằm ngay bên dưới calendar trong cùng scroll container */}
+          {detailDate && (
+            <div className="border-t border-border animate-slide-up">
+              {/* Panel header */}
+              <div className="flex items-center justify-between px-4 py-2.5 bg-card border-b border-border sticky top-0 z-10">
+                <p className="text-sm font-semibold text-foreground">
+                  {formatDateLong(detailDate)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    leftIcon={<Plus className="w-3.5 h-3.5" />}
+                    onClick={() => mode === 'finance'
+                      ? handleAddExpense(detailDate)
+                      : handleOpenAddEvent(detailDate)
+                    }
+                  >
+                    {mode === 'finance' ? 'Thêm chi tiêu' : 'Thêm sự kiện'}
+                  </Button>
+                  <button
+                    onClick={() => setDetailDate(null)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
+                    aria-label="Đóng"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* DayView content — natural height, scroll theo parent */}
+              <DayView
+                dateStr={detailDate} mode={mode} calendarEvents={events}
+                onEditEvent={handleEditEvent} onDeleteEvent={handleDeleteEvent}
+                onAddExpense={() => handleAddExpense(detailDate)}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Day / Year view — giữ nguyên flex-1 overflow-hidden */
+        <div className="flex-1 flex flex-col overflow-hidden">
           {view === 'day' && (
             <div className="flex flex-col flex-1 overflow-hidden h-full">
               <div className="px-4 py-2.5 border-b border-border bg-card flex items-center justify-between shrink-0">
@@ -228,59 +272,53 @@ export default function CalendarPage() {
             />
           )}
         </div>
+      )}
 
-        {/* ── Inline day detail panel — hiện bên dưới calendar khi click ngày ── */}
-        {detailDate && (view === 'month' || view === 'week') && (
-          <div className="flex-1 flex flex-col border-t border-border overflow-hidden animate-slide-up">
-            {/* Panel header */}
-            <div className="flex items-center justify-between px-4 py-2.5 bg-card border-b border-border shrink-0">
-              <p className="text-sm font-semibold text-foreground">
-                {formatDateLong(detailDate)}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  leftIcon={<Plus className="w-3.5 h-3.5" />}
-                  onClick={() => mode === 'finance'
-                    ? handleAddExpense(detailDate)
-                    : handleOpenAddEvent(detailDate)
-                  }
-                >
-                  {mode === 'finance' ? 'Thêm chi tiêu' : 'Thêm sự kiện'}
-                </Button>
-                <button
-                  onClick={() => setDetailDate(null)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
-                  aria-label="Đóng"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Panel content — scrollable */}
-            <div className="flex-1 overflow-y-auto">
-              <DayView
-                dateStr={detailDate} mode={mode} calendarEvents={events}
-                onEditEvent={handleEditEvent} onDeleteEvent={handleDeleteEvent}
-                onAddExpense={() => handleAddExpense(detailDate)}
-              />
-            </div>
+      {/* FAB — thiết kế giống Dashboard FAB: expand → sub-button Chi tiêu / Sự kiện */}
+      {fabExpanded && (
+        <div
+          className="fixed inset-0 z-20"
+          onClick={() => setFabExpanded(false)}
+        />
+      )}
+      <div
+        className="fixed right-4 z-30 flex flex-col items-end gap-2.5"
+        style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom) + 0.75rem)' }}
+      >
+        {fabExpanded && (
+          <div className="flex items-center gap-2.5 animate-fade-in">
+            <span className="text-xs font-medium text-foreground bg-card border border-border px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap">
+              {mode === 'finance' ? 'Thêm chi tiêu' : 'Thêm sự kiện'}
+            </span>
+            <button
+              onClick={() => {
+                setFabExpanded(false)
+                handleFAB()
+              }}
+              className={cn(
+                'w-11 h-11 rounded-full shadow-lg flex items-center justify-center text-white active:scale-95 transition-transform',
+                mode === 'finance' ? 'bg-destructive' : 'bg-blue-500',
+              )}
+              aria-label={mode === 'finance' ? 'Thêm chi tiêu' : 'Thêm sự kiện'}
+            >
+              <Plus className="w-5 h-5" />
+            </button>
           </div>
         )}
+
+        <button
+          onClick={() => setFabExpanded(v => !v)}
+          className={cn(
+            'w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white transition-all duration-200 active:scale-95',
+            fabExpanded ? 'bg-muted-foreground rotate-45' : 'bg-primary',
+          )}
+          aria-label="Thêm nhanh"
+        >
+          {fabExpanded ? <X className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+        </button>
       </div>
 
-      {/* FAB — vị trí khớp với Dashboard FAB, tính safe-area-inset cho iPhone */}
-      <button
-        onClick={handleFAB}
-        className="fixed right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all z-40"
-        style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom) + 0.75rem)' }}
-        aria-label={mode === 'events' ? 'Thêm sự kiện' : 'Thêm chi tiêu'}
-      >
-        <Plus className="w-6 h-6" />
-      </button>
-
-      {/* Modals (không còn DayDetailPanel) */}
+      {/* Modals */}
       <AddEventModal
         open={eventModal.open} defaultDate={eventModal.date}
         editEvent={eventModal.editEvent}
