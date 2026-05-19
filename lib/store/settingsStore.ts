@@ -126,18 +126,33 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   },
 
   updateSettings: async (userId: string, updates: Partial<UserSettings>) => {
-    const next = get().settings ? { ...get().settings!, ...updates } : null
+    const prev = get().settings
+    const next = prev ? { ...prev, ...updates } : null
     set({ settings: next })
     if (next) writeCache(SETTINGS_CACHE_KEY, next)
-    await updateUserSettings(userId, updates)
+    try {
+      await updateUserSettings(userId, updates)
+    } catch (err) {
+      set({ settings: prev })
+      if (prev) writeCache(SETTINGS_CACHE_KEY, prev)
+      throw err
+    }
   },
 
   setTheme: async (userId: string, theme: 'light' | 'dark') => {
+    const prev = get().settings
     applyTheme(theme)
-    const next = get().settings ? { ...get().settings!, theme } : null
+    const next = prev ? { ...prev, theme } : null
     set({ settings: next })
     if (next) writeCache(SETTINGS_CACHE_KEY, next)
-    await updateUserSettings(userId, { theme })
+    try {
+      await updateUserSettings(userId, { theme })
+    } catch (err) {
+      if (prev) applyTheme(prev.theme)
+      set({ settings: prev })
+      if (prev) writeCache(SETTINGS_CACHE_KEY, prev)
+      throw err
+    }
   },
 
   toggleMoneyHidden: async (userId: string) => {
@@ -161,8 +176,9 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     if (typeof window !== 'undefined') {
       localStorage.removeItem(SETTINGS_CACHE_KEY)
       localStorage.removeItem(CAT_PREFS_CACHE_KEY)
+      localStorage.removeItem('chitieu_profile_photo')
     }
-    set({ settings: null, categoryPrefs: null })
+    set({ settings: null, categoryPrefs: null, profilePhoto: null })
   },
 }))
 

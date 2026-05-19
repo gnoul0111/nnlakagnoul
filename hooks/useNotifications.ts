@@ -36,11 +36,14 @@ export function useNotifications() {
     if (msgHandlerSet.current) return
     msgHandlerSet.current = true
 
+    let unsubscribe: (() => void) | undefined
+    let cancelled = false
+
     getMessagingInstance()
       .then(messaging => {
-        if (!messaging) return
+        if (!messaging || cancelled) return
 
-        onMessage(messaging, payload => {
+        unsubscribe = onMessage(messaging, payload => {
           const { title, body } = payload.notification ?? {}
           if (!title) return
 
@@ -56,5 +59,11 @@ export function useNotifications() {
       .catch(() => {
         // FCM không supported (iOS trước 16.4, trình duyệt cũ) — bỏ qua
       })
+
+    return () => {
+      cancelled = true
+      unsubscribe?.()
+      msgHandlerSet.current = false
+    }
   }, [])
 }

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\" -Depth 1 | Where-Object { $_.Name -ne \"node_modules\" })",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\\\\app\" -Recurse | Select-Object FullName | Where-Object { $_.FullName -notmatch \"node_modules\" })",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\\\\app\" -Recurse | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\\\\components\\\\auth\" | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\\\\lib\" -Recurse | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\\\\public\" | ForEach-Object { $_.Name })",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\\\\components\\\\calendar\" | ForEach-Object { $_.Name })",
+      "Bash(git check-ignore *)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\" -Recurse -Directory | Select-Object -First 20 | ForEach-Object { $_.FullName })"
+    ]
+  }
+}

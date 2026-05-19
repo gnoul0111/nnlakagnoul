@@ -65,7 +65,9 @@ export function initAppCheck(): void {
       isTokenAutoRefreshEnabled: true,
     })
     appCheckInitialized = true
-    console.log('[AppCheck] Initialized with reCAPTCHA Enterprise.')
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[AppCheck] Initialized with reCAPTCHA Enterprise.')
+    }
   } catch (err) {
     console.error('[AppCheck] Initialization failed:', err)
   }

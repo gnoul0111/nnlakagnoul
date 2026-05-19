@@ -27,7 +27,9 @@ import { cn } from '@/lib/utils/cn'
 // ─── Form Modal ───────────────────────────────────────────────────────────────
 
 const schema = z.object({
-  amount: z.string().min(1, 'Nhập số tiền.').refine(v => parseAmount(v) > 0, 'Phải lớn hơn 0.'),
+  amount: z.string().min(1, 'Nhập số tiền.')
+    .refine(v => parseAmount(v) > 0, 'Phải lớn hơn 0.')
+    .refine(v => parseAmount(v) < 999_000_000, 'Số tiền không được vượt quá 999 triệu.'),
   source: z.string().min(1, 'Nhập nguồn thu.'),
   date:   z.string().min(1, 'Chọn ngày.'),
   note:   z.string().optional(),

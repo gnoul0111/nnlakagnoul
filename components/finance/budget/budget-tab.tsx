@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -41,6 +41,7 @@ export function BudgetTab() {
   const [editing, setEditing]       = useState(false)
   const [saving, setSaving]         = useState(false)
   const [catBudgets, setCatBudgets] = useState<CategoryBudgets>({})
+  const catBudgetsCache = useRef<Record<string, CategoryBudgets>>({})
   const [catEditing, setCatEditing] = useState<string | null>(null)
   const [catInput, setCatInput]     = useState('')
 
@@ -58,7 +59,15 @@ export function BudgetTab() {
 
   useEffect(() => {
     if (!user) return
-    getCategoryBudgets(user.uid, currentMonth).then(setCatBudgets)
+    const key = `${user.uid}_${currentMonth}`
+    if (catBudgetsCache.current[key]) {
+      setCatBudgets(catBudgetsCache.current[key])
+      return
+    }
+    getCategoryBudgets(user.uid, currentMonth).then(data => {
+      catBudgetsCache.current[key] = data
+      setCatBudgets(data)
+    })
   }, [user?.uid, currentMonth])
 
   const onSubmit = async (values: FormValues) => {
@@ -85,6 +94,7 @@ export function BudgetTab() {
     setCatBudgets(updated)
     try {
       await setCategoryBudgets(user.uid, currentMonth, updated)
+      catBudgetsCache.current[`${user.uid}_${currentMonth}`] = updated
       setCatEditing(null)
       toast.success('Đã lưu ngân sách danh mục!')
     } catch (err) {

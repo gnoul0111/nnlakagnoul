@@ -169,8 +169,14 @@ export const useEventStore = create<EventStoreState>((set, get) => {
   // → strictly sequential, no interleaving possible.
 
   const _doSync = async (userId: string, lastSync: number) => {
+    // Guard: abort nếu user đã logout hoặc đổi sang user khác
+    if (get()._currentUserId !== userId) return
+
     const newEvents = await getNewEventsSince(userId, lastSync)
     if (newEvents.length === 0) return
+
+    // Guard lần 2: check lại sau async fetch (user có thể logout trong lúc chờ)
+    if (get()._currentUserId !== userId) return
 
     const currentCache = get()._eventsCache ?? []
     const cleanedCache = pruneReplacedOptimistic(currentCache, newEvents)

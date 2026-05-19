@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title:       'Chi Tiêu',
   description: 'Ứng dụng quản lý chi tiêu cá nhân',
   manifest:    '/manifest.json',
+  icons:       { icon: '/icons/favicon.png' },
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Chi Tiêu' },
 }
 

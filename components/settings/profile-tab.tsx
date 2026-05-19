@@ -11,6 +11,7 @@ import { FormField, Input, PasswordInput } from '@/components/ui/input'
 import { Modal }                   from '@/components/ui/modal'
 import { Spinner }                 from '@/components/ui/spinner'
 import { useAuthStore }            from '@/lib/store/authStore'
+import { useSettingsStore }        from '@/lib/store/settingsStore'
 import { useToast }                from '@/hooks/useToast'
 import {
   getUserProfile, upsertUserProfile,
@@ -53,7 +54,11 @@ const nameSchema = z.object({
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, 'Nhập mật khẩu hiện tại.'),
-  newPassword:     z.string().min(6, 'Mật khẩu tối thiểu 6 ký tự.'),
+  newPassword: z.string()
+    .min(8, 'Mật khẩu cần ít nhất 8 ký tự.')
+    .max(128, 'Mật khẩu không được quá 128 ký tự.')
+    .refine(v => /[A-Za-z]/.test(v), 'Mật khẩu phải chứa ít nhất 1 chữ cái.')
+    .refine(v => /[0-9]/.test(v), 'Mật khẩu phải chứa ít nhất 1 chữ số.'),
   confirmPassword: z.string().min(1, 'Xác nhận mật khẩu.'),
 }).refine(d => d.newPassword === d.confirmPassword, {
   message: 'Mật khẩu xác nhận không khớp.',
@@ -152,6 +157,8 @@ export function ProfileTab() {
       const base64 = await resizeAvatar(file)
       await upsertUserProfile(user.uid, { photoURL: base64 })
       setProfile(prev => prev ? { ...prev, photoURL: base64 } : null)
+      useSettingsStore.setState({ profilePhoto: base64 })
+      try { localStorage.setItem('chitieu_profile_photo', base64) } catch {}
       toast.success('Đã cập nhật ảnh đại diện')
     } catch {
       toast.error('Tải ảnh thất bại')

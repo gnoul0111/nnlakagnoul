@@ -16,7 +16,9 @@ export default function AuthGroupLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (isInitialized && user) {
-      router.replace('/')
+      const params = new URLSearchParams(window.location.search)
+      const redirect = params.get('redirect')
+      router.replace(redirect && redirect.startsWith('/') ? redirect : '/')
     }
   }, [user, isInitialized, router])
 

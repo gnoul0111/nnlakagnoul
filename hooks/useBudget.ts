@@ -36,9 +36,11 @@ export function useBudget(monthKey: string) {
 
       if (revalidatedRef.current !== key) {
         revalidatedRef.current = key
+        let cancelled = false
         getBudget(user.uid, monthKey)
-          .then(fresh => { budgetCache.set(key, fresh); setBudget(fresh) })
+          .then(fresh => { if (!cancelled) { budgetCache.set(key, fresh); setBudget(fresh) } })
           .catch(err => console.warn('[useBudget] revalidate failed:', err))
+        return () => { cancelled = true }
       }
       return
     }

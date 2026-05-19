@@ -9,6 +9,25 @@ import type { WorkCalendarEvent } from '@/lib/types/settings'
 import { today } from '@/lib/utils/date'
 import { CATEGORIES } from '@/lib/types/expense'
 
+// Whitelist phải khớp với validEvent() trong firestore.rules
+const VALID_EVENT_TYPES = new Set([
+  'EXPENSE_ADDED', 'EXPENSE_UPDATED', 'EXPENSE_DELETED',
+  'INCOME_ADDED', 'INCOME_CREATED', 'INCOME_DELETED',
+  'BUDGET_SET',
+  'GOAL_ADDED', 'GOAL_CREATED', 'GOAL_UPDATED', 'GOAL_DELETED',
+  'GOAL_DEPOSIT_ADDED', 'GOAL_DEPOSIT_EDITED', 'GOAL_DEPOSIT_DELETED',
+  'DEBT_CREATED', 'DEBT_UPDATED', 'DEBT_DELETED',
+  'DEBT_PAYMENT_ADDED', 'DEBT_PAYMENT_DELETED',
+  'TEMPLATE_CREATED', 'TEMPLATE_DELETED',
+  'SAVINGS_TARGET_SET', 'SAVINGS_DEPOSIT', 'SAVINGS_DEPOSIT_DELETED',
+  'SAVINGS_ALLOCATED', 'SAVINGS_ALLOCATION_DELETED',
+  'SAVINGS_WITHDRAWN', 'SAVINGS_WITHDRAWAL_DELETED',
+])
+
+const VALID_CALENDAR_CATEGORIES = new Set(['work', 'personal', 'health', 'other'])
+
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
+
 export interface BackupData {
   version: number
   exportedAt: string
@@ -122,7 +141,9 @@ export async function importJSON(
 
   // ── Phase 1: Events (chủ lực) ────────────────────────────────────────────
   const existingIds = new Set((await getAllEvents(userId)).map(e => e.id))
-  const newEvents   = raw.events.filter(e => !existingIds.has(e.id))
+  const newEvents   = raw.events.filter(e =>
+    !existingIds.has(e.id) && VALID_EVENT_TYPES.has(String(e.eventType)),
+  )
 
   // Total steps để tính progress = events + budgets + calendar
   const totalBudgets  = Array.isArray(raw.budgets)      ? raw.budgets.length      : 0
@@ -135,7 +156,7 @@ export async function importJSON(
   for (let i = 0; i < newEvents.length; i += 50) {
     const chunk = newEvents.slice(i, i + 50)
     await appendEventsBatch(
-      chunk.map(e => ({ userId, eventType: e.eventType, data: e.data, createdAt: e.createdAt })),
+      chunk.map(e => ({ userId, eventType: e.eventType, data: e.data, createdAt: e.createdAt, clientTimestamp: e.clientTimestamp })),
     )
     done += chunk.length
     report()
@@ -165,7 +186,12 @@ export async function importJSON(
   if (totalCalendar > 0) {
     const existingCal = await getCalendarEventsByUser(userId)
     const existingCalIds = new Set(existingCal.map(e => e.id))
-    const newCal = raw.workCalendar.filter(e => !existingCalIds.has(e.id))
+    const newCal = raw.workCalendar.filter(e =>
+      !existingCalIds.has(e.id) &&
+      typeof e.title === 'string' && e.title.trim().length > 0 && e.title.length <= 200 &&
+      typeof e.date === 'string' && DATE_REGEX.test(e.date) &&
+      VALID_CALENDAR_CATEGORIES.has(e.category),
+    )
 
     const BATCH = 10
     for (let i = 0; i < newCal.length; i += BATCH) {

@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils/cn'
 import { thisMonth } from '@/lib/utils/date'
 import { useAppData } from '@/hooks/useAppData'
 import { formatCompact } from '@/lib/utils/currency'
-import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
 import type { CalendarMode } from './calendar-header'
 
@@ -19,7 +18,6 @@ interface YearViewProps {
 }
 
 export function YearView({ year, mode, calendarEvents, onSelectMonth }: YearViewProps) {
-  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const { expenses, allIncomes } = useAppData()
   const currentMonth = thisMonth()
 
@@ -76,12 +74,12 @@ export function YearView({ year, mode, calendarEvents, onSelectMonth }: YearView
                 <div className="flex flex-col gap-0.5">
                   {spending > 0 && (
                     <span className="text-[11px] text-destructive leading-none">
-                      {moneyHidden ? '••' : `-${formatCompact(spending)}`}
+                      {`-${formatCompact(spending)}`}
                     </span>
                   )}
                   {income > 0 && (
                     <span className="text-[11px] text-[hsl(var(--success))] leading-none">
-                      {moneyHidden ? '••' : `+${formatCompact(income)}`}
+                      {`+${formatCompact(income)}`}
                     </span>
                   )}
                 </div>

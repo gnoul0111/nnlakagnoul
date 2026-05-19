@@ -243,7 +243,6 @@ export default function CalendarPage() {
               <DayView
                 dateStr={detailDate} mode={mode} calendarEvents={events}
                 onEditEvent={handleEditEvent} onDeleteEvent={handleDeleteEvent}
-                onAddExpense={() => handleAddExpense(detailDate)}
               />
             </div>
           )}
@@ -260,7 +259,6 @@ export default function CalendarPage() {
                 <DayView
                   dateStr={anchor} mode={mode} calendarEvents={events}
                   onEditEvent={handleEditEvent} onDeleteEvent={handleDeleteEvent}
-                  onAddExpense={() => handleAddExpense(anchor)}
                 />
               </div>
             </div>

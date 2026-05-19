@@ -83,6 +83,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 
     if (typeof window !== 'undefined') {
       localStorage.removeItem('chitieu_money_hidden')
+      localStorage.removeItem('chitieu_profile_photo')
       localStorage.removeItem('offline-event-queue')
       // KHÔNG xoá chitieu_fcm_device_id — giữ để lần login sau cùng device
       // sử dụng cùng deviceId (không tạo doc subcollection mới lãng phí)

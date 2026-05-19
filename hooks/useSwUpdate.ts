@@ -3,9 +3,6 @@
 import { useEffect } from 'react'
 import { useSwUpdateStore } from '@/lib/store/swUpdateStore'
 
-// Module-level flag — tránh setup listener nhiều lần khi hook được gọi ở nhiều component
-let _initialized = false
-
 // ─── Grace period cho post-update race condition ─────────────────────────────
 //
 // PROBLEM: Sau khi user bấm "Cập nhật" → postMessage(SKIP_WAITING) →
@@ -57,8 +54,7 @@ export function useSwUpdate() {
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
-    if (_initialized) return
-    _initialized = true
+    let cancelled = false
 
     const ageAtMount   = getJustUpdatedAge()
     const inGraceMount = ageAtMount < GRACE_PERIOD_MS
@@ -76,6 +72,7 @@ export function useSwUpdate() {
     }
 
     navigator.serviceWorker.ready.then(reg => {
+      if (cancelled) return
       setRegistration(reg)
 
       if (process.env.NODE_ENV !== 'production') {
@@ -131,7 +128,10 @@ export function useSwUpdate() {
         .catch(() => {})
     }, 60 * 60 * 1000)
 
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [setHasUpdate, setRegistration])
 }
 

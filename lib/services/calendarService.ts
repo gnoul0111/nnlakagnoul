@@ -54,11 +54,3 @@ export async function getCalendarEventsByUser(
     where('userId', '==', userId),
   ])
 }
-
-export async function getCalendarEventsByMonth(
-  userId: string,
-  monthKey: string, // YYYY-MM
-): Promise<WorkCalendarEvent[]> {
-  const all = await getCalendarEventsByUser(userId)
-  return all.filter(e => e.date.startsWith(monthKey))
-}

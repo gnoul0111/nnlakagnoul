@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Sun, Moon, Bell, BellOff, Send, AlertCircle, BanIcon, Smartphone } from 'lucide-react'
 import { useAuthStore }            from '@/lib/store/authStore'
 import { useSettingsStore }        from '@/lib/store/settingsStore'
@@ -68,6 +68,18 @@ export function PreferencesTab() {
   const toast = useToast()
 
   const [saving, setSaving] = useState<string | null>(null)
+  // Local state cho time input — tránh Firestore write trên mỗi keystroke
+  const [notifTimeLocal, setNotifTimeLocal] = useState(settings?.notifTime ?? '21:00')
+  const prevNotifTime = useRef(settings?.notifTime ?? '21:00')
+
+  // Sync khi settings thay đổi từ Firestore (multi-device)
+  useEffect(() => {
+    const fresh = settings?.notifTime ?? '21:00'
+    if (fresh !== prevNotifTime.current) {
+      prevNotifTime.current = fresh
+      setNotifTimeLocal(fresh)
+    }
+  }, [settings?.notifTime])
 
   // Notification permission state
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>('default')
@@ -164,7 +176,6 @@ export function PreferencesTab() {
     }
   }
 
-  const handleNotifTime  = (e: React.ChangeEvent<HTMLInputElement>) => updateSettings(user.uid, { notifTime: e.target.value })
   const toggleReminderType = (h: number) => {
     const cur = settings.eventReminderTypes ?? [1]
     updateSettings(user.uid, {
@@ -339,8 +350,8 @@ export function PreferencesTab() {
                 <p className="text-sm font-medium text-foreground">Giờ nhắc nhập chi tiêu</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Mặc định: 21:00</p>
               </div>
-              <input type="time" value={settings.notifTime ?? '21:00'}
-                onChange={handleNotifTime}
+              <input type="time" value={notifTimeLocal}
+                onChange={e => setNotifTimeLocal(e.target.value)}
                 onBlur={e => save('notifTime', () => updateSettings(user.uid, { notifTime: e.target.value }))}
                 className="h-9 rounded-lg border border-input bg-background px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
               />

@@ -3,14 +3,12 @@
 import { Pencil, Trash2, Clock, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { useDayFinanceData } from '@/hooks/useCalendarData'
-import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { formatVND } from '@/lib/utils/currency'
 import { CATEGORIES } from '@/lib/types/expense'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
 import type { CalendarMode } from './calendar-header'
 
 const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.value, c]))
-const HIDDEN   = '••••'
 
 const EVENT_CAT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   work:     { bg: 'bg-blue-50 dark:bg-blue-900/25',    text: 'text-blue-700 dark:text-blue-300',    label: 'Công việc' },
@@ -25,20 +23,18 @@ interface DayViewProps {
   calendarEvents: WorkCalendarEvent[]
   onEditEvent:    (event: WorkCalendarEvent) => void
   onDeleteEvent:  (event: WorkCalendarEvent) => void
-  onAddExpense:   () => void
 }
 
 export function DayView({
   dateStr, mode, calendarEvents, onEditEvent, onDeleteEvent,
 }: DayViewProps) {
-  const moneyHidden = useSettingsStore(selectMoneyHidden)
   const {
     spendingExpenses, linkedExpenses, dayIncomes,
     totalSpending, totalIncome,
   } = useDayFinanceData(dateStr)
 
   const dayEvents = calendarEvents.filter(e => e.date === dateStr)
-  const fmt       = (n: number) => moneyHidden ? HIDDEN : formatVND(n)
+  const fmt       = (n: number) => formatVND(n)
 
   // ── Events mode ──────────────────────────────────────────────────────────────
   if (mode === 'events') {

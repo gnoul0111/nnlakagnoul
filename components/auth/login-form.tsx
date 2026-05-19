@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input, FormField, PasswordInput } from '@/components/ui/input'
 import { loginWithEmail, getAuthErrorMessage } from '@/lib/firebase/auth'
@@ -23,7 +22,6 @@ type FormValues = z.infer<typeof schema>
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function LoginForm() {
-  const router = useRouter()
   const toast = useToast()
   const [serverError, setServerError] = useState<string | null>(null)
 
@@ -40,7 +38,8 @@ export function LoginForm() {
     try {
       await loginWithEmail(values.email, values.password)
       toast.success('Đăng nhập thành công!')
-      router.replace('/')
+      // Không redirect ở đây — onAuthStateChanged sẽ fire và (auth)/layout.tsx
+      // tự redirect về / khi user được set vào store.
     } catch (err) {
       const code = (err as { code?: string }).code ?? ''
       setServerError(getAuthErrorMessage(code))

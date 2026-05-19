@@ -8,7 +8,7 @@ import type { CategoryValue } from '@/lib/types/expense'
 export function defaultSettings(userId: string): UserSettings {
   return {
     userId,
-    theme: 'light',
+    theme: 'dark',
     weekStartDay: 'monday',
     salaryDay: 0,
     moneyHidden: false,
