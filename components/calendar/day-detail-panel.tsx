@@ -45,7 +45,6 @@ export function DayDetailPanel({
           calendarEvents={calendarEvents}
           onEditEvent={e => { onClose(); onEditEvent(e) }}
           onDeleteEvent={e => { onClose(); onDeleteEvent(e) }}
-          onAddExpense={() => onAddExpense(dateStr)}
         />
       </div>
     </Modal>
