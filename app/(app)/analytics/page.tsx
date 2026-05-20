@@ -12,6 +12,7 @@ import { CashflowCard }      from '@/components/analytics/cashflow-card'
 import { TrendChart }        from '@/components/analytics/trend-chart'
 import { CategorySummary }   from '@/components/analytics/category-summary'
 import { Spinner }           from '@/components/ui/spinner'
+import { AiSummaryWidget }   from '@/components/ai/AiSummaryWidget'
 
 import {
   useAnalyticsData, useCompareData,
@@ -95,6 +96,11 @@ export default function AnalyticsPage() {
       {/* Cashflow (month only) */}
       {cashflow && (
         <CashflowCard {...cashflow} moneyHidden={moneyHidden} />
+      )}
+
+      {/* AI summary — chỉ hiện ở month view vì cần monthKey cụ thể */}
+      {range.type === 'month' && (
+        <AiSummaryWidget monthKey={monthKey} />
       )}
 
       {/* 6-month trend */}

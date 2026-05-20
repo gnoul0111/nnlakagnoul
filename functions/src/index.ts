@@ -3,11 +3,14 @@ import * as functions from 'firebase-functions'
 import { defineSecret } from 'firebase-functions/params'
 import { getMessaging } from 'firebase-admin/messaging'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // ─── Secrets ──────────────────────────────────────────────────────────────────
 // Thay thế functions.config() (đã deprecated). Set bằng:
 //   firebase functions:secrets:set NOTIFY_SECRET
+//   firebase functions:secrets:set GEMINI_API_KEY
 const notifySecret = defineSecret('NOTIFY_SECRET')
+const geminiApiKey = defineSecret('GEMINI_API_KEY')
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 

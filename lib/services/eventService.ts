@@ -9,8 +9,11 @@ import {
   Timestamp,
   db,
   COLLECTIONS,
+  getDocument,
+  setDocument,
 } from '@/lib/firebase/firestore'
 import type { EventDoc, EventDocInput } from '@/lib/types/events'
+import type { ReplayedState } from '@/lib/engine/replay'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -104,4 +107,65 @@ export async function appendEventsBatch(inputs: EventDocInput[]): Promise<void> 
       }),
     )
   }
+}
+
+// ─── Snapshot functions ───────────────────────────────────────────────────────
+
+export interface SnapshotDoc {
+  userId: string
+  lastEventId: string
+  lastEventTimestamp: { seconds: number; nanoseconds: number } | Timestamp
+  lastEvent: EventDoc
+  state: ReplayedState
+  updatedAt: string
+}
+
+export async function getLatestSnapshot(userId: string): Promise<SnapshotDoc | null> {
+  try {
+    const snap = await getDocument<SnapshotDoc>(COLLECTIONS.EXPENSE_SNAPSHOTS, userId)
+    return snap
+  } catch (err) {
+    console.error('[eventService] Failed to fetch snapshot:', err)
+    return null
+  }
+}
+
+export async function saveSnapshot(
+  userId: string,
+  snapshot: Omit<SnapshotDoc, 'updatedAt'>,
+): Promise<void> {
+  const ts = snapshot.lastEventTimestamp
+  const timestampObj = ts instanceof Timestamp 
+    ? ts 
+    : new Timestamp(ts.seconds, ts.nanoseconds)
+
+  await setDocument(
+    COLLECTIONS.EXPENSE_SNAPSHOTS,
+    userId,
+    {
+      ...snapshot,
+      lastEventTimestamp: timestampObj,
+      updatedAt: new Date().toISOString(),
+    },
+    false, // overwrite
+  )
+}
+
+export async function getEventsSinceTimestamp(
+  userId: string,
+  sinceTimestamp: { seconds: number; nanoseconds: number } | Timestamp,
+): Promise<EventDoc[]> {
+  const ts = sinceTimestamp instanceof Timestamp
+    ? sinceTimestamp
+    : new Timestamp(sinceTimestamp.seconds, sinceTimestamp.nanoseconds)
+
+  const ref = collection(db, COLLECTIONS.EXPENSE_EVENTS)
+  const q = query(
+    ref,
+    where('userId', '==', userId),
+    where('timestamp', '>=', ts),
+    orderBy('timestamp', 'asc'),
+  )
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as EventDoc)
 }

@@ -1,4 +1,4 @@
-import { replay, getActiveExpenses, getSpendingExpenses, getActiveGoals, getActiveDebts } from '../replay'
+import { replay, getActiveExpenses, getSpendingExpenses, getActiveGoals, getActiveDebts, replayFromSnapshot } from '../replay'
 import type { EventDoc } from '@/lib/types/events'
 import type { Timestamp } from 'firebase/firestore'
 
@@ -413,5 +413,92 @@ describe('replay — Edge cases', () => {
       makeEvent('EXPENSE_UPDATED', { id: 'nonexistent', amount: 999 }),
     ]
     expect(() => replay(events)).not.toThrow()
+  })
+})
+
+// ─── Snapshot & Conflict Resolution (LWW) ────────────────────────────────────
+
+describe('replay — Snapshot & Conflict Resolution (LWW)', () => {
+  test('replayFromSnapshot should apply events on top of a snapshot', () => {
+    const initialEvents = [
+      makeEvent('EXPENSE_ADDED', { id: 'exp_1', amount: 50000, category: 'food', date: '2026-03-15', note: 'Cơm trưa' }),
+    ]
+    const baseState = replay(initialEvents)
+
+    const nextEvents = [
+      makeEvent('EXPENSE_UPDATED', { id: 'exp_1', amount: 60000, note: 'Cơm trưa update' }),
+      makeEvent('EXPENSE_ADDED', { id: 'exp_2', amount: 30000, category: 'taxi', date: '2026-03-15', note: 'Di chuyển' }),
+    ]
+
+    const finalState = replayFromSnapshot(baseState, nextEvents)
+
+    expect(finalState.expenses).toHaveLength(2)
+    expect(finalState.expenses.find(e => e.id === 'exp_1')?.amount).toBe(60000)
+    expect(finalState.expenses.find(e => e.id === 'exp_2')?.amount).toBe(30000)
+  })
+
+  test('LWW rule should apply: older updates are ignored if newer update is present', () => {
+    const eAdded = makeEvent('EXPENSE_ADDED', { id: 'exp_1', amount: 50000, category: 'food', date: '2026-03-15', note: 'Original' })
+    
+    // Create updates with specific clientTimestamps
+    const eUpdateNew = {
+      ...makeEvent('EXPENSE_UPDATED', { id: 'exp_1', amount: 80000, note: 'New Update' }),
+      clientTimestamp: '2026-05-20T12:00:00.000Z',
+    }
+    
+    const eUpdateOld = {
+      ...makeEvent('EXPENSE_UPDATED', { id: 'exp_1', amount: 60000, note: 'Old Update' }),
+      clientTimestamp: '2026-05-20T11:00:00.000Z',
+    }
+
+    // Applying newer update first, then older update. The newer one must win.
+    const state = replay([eAdded, eUpdateNew, eUpdateOld])
+    const exp = state.expenses.find(e => e.id === 'exp_1')
+    expect(exp?.amount).toBe(80000)
+    expect(exp?.note).toBe('New Update')
+  })
+
+  test('LWW rule should apply to goals', () => {
+    const gAdded = makeEvent('GOAL_ADDED', {
+      id: 'goal_1', userId: 'user1', name: 'Save for car', icon: '🚗',
+      targetAmount: 50000, currentAmount: 0, deadline: null, deposits: [],
+      deleted: false, createdTimestamp: 1700000000
+    })
+
+    const gUpdateNew = {
+      ...makeEvent('GOAL_UPDATED', { id: 'goal_1', name: 'Car Fund (New)' }),
+      clientTimestamp: '2026-05-20T12:00:00.000Z',
+    }
+
+    const gUpdateOld = {
+      ...makeEvent('GOAL_UPDATED', { id: 'goal_1', name: 'Car Fund (Old)' }),
+      clientTimestamp: '2026-05-20T11:00:00.000Z',
+    }
+
+    const state = replay([gAdded, gUpdateNew, gUpdateOld])
+    const goal = state.goals.find(g => g.id === 'goal_1')
+    expect(goal?.name).toBe('Car Fund (New)')
+  })
+
+  test('LWW rule should apply to debts', () => {
+    const dCreated = makeEvent('DEBT_CREATED', {
+      id: 'debt_1', userId: 'user1', name: 'Borrow John', amount: 100,
+      type: 'borrow', dueDate: null, note: '', paidAmount: 0, payments: [],
+      deleted: false, createdAt: 1700000000
+    })
+
+    const dUpdateNew = {
+      ...makeEvent('DEBT_UPDATED', { id: 'debt_1', name: 'John Debt (New)' }),
+      clientTimestamp: '2026-05-20T12:00:00.000Z',
+    }
+
+    const dUpdateOld = {
+      ...makeEvent('DEBT_UPDATED', { id: 'debt_1', name: 'John Debt (Old)' }),
+      clientTimestamp: '2026-05-20T11:00:00.000Z',
+    }
+
+    const state = replay([dCreated, dUpdateNew, dUpdateOld])
+    const debt = state.debts.find(d => d.id === 'debt_1')
+    expect(debt?.name).toBe('John Debt (New)')
   })
 })

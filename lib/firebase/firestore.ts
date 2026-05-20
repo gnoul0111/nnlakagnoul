@@ -23,6 +23,7 @@ import { db } from './config'
 
 export const COLLECTIONS = {
   EXPENSE_EVENTS: 'expense_events',
+  EXPENSE_SNAPSHOTS: 'expense_snapshots',
   BUDGETS:        'budgets',
   USERS:          'users',
   USER_SETTINGS:  'user_settings',

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { FormField, Input } from '@/components/ui/input'
 import { AmountInput } from '@/components/ui/amount-input'
 import { DatePicker } from '@/components/ui/date-picker'
+import { ReceiptScanner } from '@/components/ai/ReceiptScanner'
 import { useAppend } from '@/hooks/useAppend'
 import { useToast } from '@/hooks/useToast'
 import { useSettingsStore, selectHiddenCategories } from '@/lib/store/settingsStore'
@@ -19,6 +20,7 @@ import { newExpenseId } from '@/lib/utils/id'
 import { today } from '@/lib/utils/date'
 import { parseAmount } from '@/lib/utils/currency'
 import { cn } from '@/lib/utils/cn'
+import type { ScanResult } from '@/hooks/useReceiptScan'
 
 // ─── Validators ───────────────────────────────────────────────────────────────
 
@@ -89,6 +91,17 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editExpense, copyFrom, open, defaultDate])
 
+  // Nhận kết quả từ AI scanner và fill vào form
+  // QUAN TRỌNG: dùng useCallback để tránh re-create mỗi render.
+  // AmountInput nhận raw digits string (vd: "150000") — setter nội bộ tự format thành "150.000".
+  const handleScanResult = useCallback((result: ScanResult) => {
+    if (result.amount !== null) setValue('amount', String(result.amount))
+    if (result.date)            setValue('date',   result.date)
+    if (result.category)        setValue('category', result.category)
+    if (result.title)           setValue('title',  result.title)
+    if (result.note)            setValue('note',   result.note)
+  }, [setValue])
+
   const onSubmit = async (values: FormValues) => {
     const amount = parseAmount(values.amount)
     // FIX: userId BẮT BUỘC phải có trong data.
@@ -144,6 +157,11 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
     <Modal variant="center" open={open} onClose={onClose}
       title={editExpense ? 'Sửa chi tiêu' : copyFrom ? 'Sao chép chi tiêu' : 'Thêm chi tiêu'}>
       <form onSubmit={handleSubmit(onSubmit)} className="px-4 pb-6 space-y-4">
+        {/* AI Receipt Scanner — chỉ hiện khi thêm mới hoặc chỉnh sửa, không hiện khi copy */}
+        {!copyFrom && (
+          <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting} />
+        )}
+
         {/* Category grid */}
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-2">Danh mục</p>

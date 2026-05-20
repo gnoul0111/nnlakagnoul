@@ -1,7 +1,22 @@
 import { create } from 'zustand'
-import { getAllEvents, getNewEventsSince } from '@/lib/services/eventService'
-import { replay, applyEvent, emptyState, type ReplayedState } from '@/lib/engine/replay'
+import {
+  getAllEvents,
+  getNewEventsSince,
+  getLatestSnapshot,
+  saveSnapshot,
+  getEventsSinceTimestamp,
+  type SnapshotDoc,
+} from '@/lib/services/eventService'
+import {
+  replay,
+  applyEvent,
+  emptyState,
+  replayFromSnapshot,
+  sortEvents,
+  type ReplayedState,
+} from '@/lib/engine/replay'
 import type { EventDoc } from '@/lib/types/events'
+import { Timestamp } from '@/lib/firebase/firestore'
 
 // ─── Cache constants ──────────────────────────────────────────────────────────
 
@@ -37,6 +52,7 @@ const IDB_STORE_NAME = 'events_cache'
 const IDB_VERSION    = 1
 
 interface CachePayload {
+  snapshot: SnapshotDoc | null
   events:   EventDoc[]
   lastSync: number
 }
@@ -146,6 +162,7 @@ function enqueueSyncOperation(op: () => Promise<void>): Promise<void> {
 // ─── Store state ──────────────────────────────────────────────────────────────
 
 interface EventStoreState {
+  _snapshot:       SnapshotDoc | null
   _eventsCache:    EventDoc[] | null
   _lastSync:       number | null
   _currentUserId:  string | null
@@ -165,6 +182,47 @@ interface EventStoreState {
 
 export const useEventStore = create<EventStoreState>((set, get) => {
 
+  // Private helper to check and save snapshots
+  const checkAndCreateSnapshot = async (userId: string) => {
+    const { _eventsCache, _snapshot, replayedState } = get()
+    if (!_eventsCache || !replayedState || _eventsCache.length <= 300) return
+
+    const nonOptimisticEvents = _eventsCache.filter(e => !e.id.startsWith('optimistic_'))
+    if (nonOptimisticEvents.length === 0) return
+
+    const lastEvent = nonOptimisticEvents[nonOptimisticEvents.length - 1]
+    const lastEventIdx = _eventsCache.findIndex(e => e.id === lastEvent.id)
+    if (lastEventIdx === -1) return
+
+    const snapshotEvents = _eventsCache.slice(0, lastEventIdx + 1)
+    const remainingEvents = _eventsCache.slice(lastEventIdx + 1)
+
+    const snapshotState = _snapshot
+      ? replayFromSnapshot(_snapshot.state, snapshotEvents)
+      : replay(snapshotEvents)
+
+    const newSnapshot: SnapshotDoc = {
+      userId,
+      lastEventId: lastEvent.id,
+      lastEventTimestamp: lastEvent.timestamp,
+      lastEvent,
+      state: snapshotState,
+      updatedAt: new Date().toISOString(),
+    }
+
+    try {
+      await saveSnapshot(userId, newSnapshot)
+      const freshLastSync = get()._lastSync ?? Date.now()
+      writeLocalCache(userId, { snapshot: newSnapshot, events: remainingEvents, lastSync: freshLastSync })
+      set({
+        _snapshot:     newSnapshot,
+        _eventsCache:  remainingEvents,
+      })
+    } catch (err) {
+      console.warn('[EventStore] Background snapshot failed:', err)
+    }
+  }
+
   // FIX SYNC-03: syncBackground and syncEvents both enqueue via _syncChain
   // → strictly sequential, no interleaving possible.
 
@@ -183,18 +241,25 @@ export const useEventStore = create<EventStoreState>((set, get) => {
     const merged       = mergeEvents(cleanedCache, newEvents)
     const newLastSync  = Date.now()
 
-    writeLocalCache(userId, { events: merged, lastSync: newLastSync })
+    const snapshot = get()._snapshot
+    const replayedState = snapshot
+      ? replayFromSnapshot(snapshot.state, merged)
+      : replay(merged)
 
-    const replayedState = replay(merged)
+    writeLocalCache(userId, { snapshot, events: merged, lastSync: newLastSync })
+
     set({
       _eventsCache:   merged,
       _lastSync:      newLastSync,
       _currentUserId: userId,
       replayedState,
     })
+
+    await checkAndCreateSnapshot(userId)
   }
 
   return {
+    _snapshot:      null,
     _eventsCache:   null,
     _lastSync:      null,
     _currentUserId: null,
@@ -216,33 +281,77 @@ export const useEventStore = create<EventStoreState>((set, get) => {
 
       // Tầng 2: IndexedDB cache (persist qua tab close)
       const localCache = await readLocalCache(userId)
-      if (localCache && localCache.events.length > 0) {
-        const staleState = replay(localCache.events)
-        set({
-          _eventsCache:   localCache.events,
-          _lastSync:      localCache.lastSync,
-          _currentUserId: userId,
-          replayedState:  staleState,
-          isLoading:      false,
-        })
-        enqueueSyncOperation(() => _doSync(userId, localCache.lastSync))
-        return
+      if (localCache) {
+        const hasEvents = localCache.events && localCache.events.length > 0
+        const hasSnapshot = !!localCache.snapshot
+
+        if (hasSnapshot || hasEvents) {
+          const snapshot = localCache.snapshot
+          const staleState = snapshot
+            ? replayFromSnapshot(snapshot.state, localCache.events)
+            : replay(localCache.events)
+          set({
+            _snapshot:      snapshot,
+            _eventsCache:   localCache.events,
+            _lastSync:      localCache.lastSync,
+            _currentUserId: userId,
+            replayedState:  staleState,
+            isLoading:      false,
+          })
+          enqueueSyncOperation(() => _doSync(userId, localCache.lastSync))
+          return
+        }
       }
 
       // Tầng 3: cold start
       set({ isLoading: true, _currentUserId: userId })
       try {
-        const events   = await getAllEvents(userId)
-        const lastSync = Date.now()
-        writeLocalCache(userId, { events, lastSync })
+        const snapshot = await getLatestSnapshot(userId)
 
-        const replayedState = replay(events)
-        set({
-          _eventsCache:   events,
-          _lastSync:      lastSync,
-          replayedState,
-          isLoading:      false,
-        })
+        let events: EventDoc[] = []
+        let lastSync = Date.now()
+        let replayedState: ReplayedState
+
+        if (snapshot && snapshot.lastEventTimestamp) {
+          const newEvents = await getEventsSinceTimestamp(userId, snapshot.lastEventTimestamp as Timestamp)
+
+          const lastEvent = snapshot.lastEvent
+          const filteredNewEvents = newEvents.filter(e => e.id !== lastEvent.id)
+
+          const combined = sortEvents([lastEvent, ...filteredNewEvents])
+          const lastEventIdx = combined.findIndex(e => e.id === lastEvent.id)
+          const eventsToApply = lastEventIdx !== -1 ? combined.slice(lastEventIdx + 1) : filteredNewEvents
+
+          replayedState = replayFromSnapshot(snapshot.state, eventsToApply)
+          events = eventsToApply
+          lastSync = Date.now()
+
+          writeLocalCache(userId, { snapshot, events, lastSync })
+          set({
+            _snapshot:      snapshot,
+            _eventsCache:   events,
+            _lastSync:      lastSync,
+            replayedState,
+            isLoading:      false,
+          })
+        } else {
+          const allEvents = await getAllEvents(userId)
+          replayedState = replay(allEvents)
+          events = allEvents
+          lastSync = Date.now()
+
+          writeLocalCache(userId, { snapshot: null, events, lastSync })
+          set({
+            _snapshot:      null,
+            _eventsCache:   events,
+            _lastSync:      lastSync,
+            replayedState,
+            isLoading:      false,
+          })
+        }
+
+        await checkAndCreateSnapshot(userId)
+
       } catch (err) {
         console.error('[EventStore] loadEvents full fetch failed:', err)
         set({
@@ -275,10 +384,15 @@ export const useEventStore = create<EventStoreState>((set, get) => {
           const cleanedCache = pruneReplacedOptimistic(currentCache, newEvents)
           const merged       = mergeEvents(cleanedCache, newEvents)
           const lastSync     = Date.now()
+          const snapshot     = get()._snapshot
 
-          writeLocalCache(userId, { events: merged, lastSync })
-          const replayedState = replay(merged)
+          writeLocalCache(userId, { snapshot, events: merged, lastSync })
+          const replayedState = snapshot
+            ? replayFromSnapshot(snapshot.state, merged)
+            : replay(merged)
           set({ _eventsCache: merged, _lastSync: lastSync, replayedState })
+
+          await checkAndCreateSnapshot(userId)
         } catch (err) {
           console.error('[EventStore] syncEvents failed:', err)
         }
@@ -293,17 +407,6 @@ export const useEventStore = create<EventStoreState>((set, get) => {
 
       // FIX PERF-02: Incremental state update — chỉ apply event mới nhất lên
       // state hiện tại, thay vì replay() toàn bộ N events từ đầu.
-      //
-      // Tại sao an toàn:
-      //   - appendLocalEvent() chỉ được gọi từ useAppend() với clientTimestamp
-      //     = now() → event mới luôn là event mới nhất về mặt thời gian.
-      //   - Với optimistic events (prefix 'optimistic_'), thứ tự chronological
-      //     là đúng vì user vừa tạo chúng.
-      //   - syncEvents() và loadEvents() vẫn dùng replay() đầy đủ → state
-      //     luôn được reconcile đúng sau mỗi lần sync với Firestore.
-      //
-      // Shallow clone để tránh mutate state cũ (savingsPlans cần deep clone
-      // vì applyEvent có thể mutate plan.deposits[]):
       const base = replayedState ?? emptyState()
       const newState: ReplayedState = {
         expenses:     [...base.expenses],
@@ -316,7 +419,7 @@ export const useEventStore = create<EventStoreState>((set, get) => {
       applyEvent(newState, event)
 
       if (_lastSync !== null) {
-        writeLocalCache(_currentUserId, { events: merged, lastSync: _lastSync })
+        writeLocalCache(_currentUserId, { snapshot: get()._snapshot, events: merged, lastSync: _lastSync })
       }
       set({ _eventsCache: merged, replayedState: newState })
     },
@@ -328,9 +431,13 @@ export const useEventStore = create<EventStoreState>((set, get) => {
       const filtered = _eventsCache.filter(e => e.id !== eventId)
       if (filtered.length === _eventsCache.length) return
 
-      const replayedState = replay(filtered)
+      const snapshot = get()._snapshot
+      const replayedState = snapshot
+        ? replayFromSnapshot(snapshot.state, filtered)
+        : replay(filtered)
+
       if (_lastSync !== null) {
-        writeLocalCache(_currentUserId, { events: filtered, lastSync: _lastSync })
+        writeLocalCache(_currentUserId, { snapshot, events: filtered, lastSync: _lastSync })
       }
       set({ _eventsCache: filtered, replayedState })
     },
@@ -339,13 +446,14 @@ export const useEventStore = create<EventStoreState>((set, get) => {
       clearLocalCache(userId)
       // Reset the sync chain so pending operations don't run against stale state
       _syncChain = Promise.resolve()
-      set({ _eventsCache: null, _lastSync: null, replayedState: null })
+      set({ _snapshot: null, _eventsCache: null, _lastSync: null, replayedState: null })
     },
 
     clearAllCache: (userId: string) => {
       clearLocalCache(userId)
       _syncChain = Promise.resolve()
       set({
+        _snapshot:      null,
         _eventsCache:   null,
         _lastSync:      null,
         _currentUserId: null,

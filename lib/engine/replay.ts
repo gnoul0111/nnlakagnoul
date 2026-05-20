@@ -50,7 +50,7 @@ function getEventMs(event: EventDoc): number {
   return event.timestamp?.toMillis?.() ?? 0
 }
 
-function sortEvents(events: EventDoc[]): EventDoc[] {
+export function sortEvents(events: EventDoc[]): EventDoc[] {
   return [...events].sort((a, b) => {
     const aMs = getEventMs(a)
     const bMs = getEventMs(b)
@@ -134,7 +134,12 @@ export function applyEvent(state: ReplayedState, event: EventDoc): void {
         case 'EXPENSE_ADDED': {
           if (!data.id) break
           const exists = state.expenses.some(e => e.id === data.id)
-          if (!exists) state.expenses.push(data as Expense)
+          if (!exists) {
+            state.expenses.push({
+              ...(data as Expense),
+              _updatedClientTimestamp: event.clientTimestamp ?? event.createdAt ?? new Date().toISOString(),
+            })
+          }
           break
         }
 
@@ -144,33 +149,21 @@ export function applyEvent(state: ReplayedState, event: EventDoc): void {
           if (idx === -1) break
           if (state.expenses[idx].userId && state.expenses[idx].userId !== userId) break
 
-          // FIX CONC-04: Tombstone guard — delete vs update conflict resolution.
-          //
-          // Scenario: Device A deletes expense at T1. Device B (offline) had
-          // already queued an update at T2 (T2 > T1). When B comes online, its
-          // update is written to Firestore. replay() processes:
-          //   EXPENSE_ADDED → EXPENSE_DELETED(T1) → EXPENSE_UPDATED(T2)
-          //
-          // Before fix: EXPENSE_UPDATED spreads data onto deleted expense.
-          // `deleted:true` is preserved (since update data doesn't set deleted),
-          // BUT this is fragile and does NOT implement true LWW semantics.
-          // With LWW, the update at T2 > T1 should logically WIN — meaning
-          // the expense should be "resurrected" by the later update.
-          //
-          // Correct LWW rule:
-          //   if update.clientTimestamp > delete.clientTimestamp → UPDATE WINS
-          //     (later intent: user edited AFTER deleting on another device
-          //      → treat as intentional override of the delete)
-          //   if update.clientTimestamp < delete.clientTimestamp → DELETE WINS
-          //     (user deleted AFTER editing → delete is the final intent)
-          //
-          // This makes conflict resolution EXPLICIT and PREDICTABLE.
-          // All events are preserved in Firestore → zero data loss.
           const existing = state.expenses[idx]
+          
+          // LWW check: skip update if existing record is strictly newer
+          const existingUpdateMs = existing._updatedClientTimestamp
+            ? isoToMs(existing._updatedClientTimestamp)
+            : isoToMs(existing.date)
+          const currentUpdateMs = eventMs(event)
+          if (existingUpdateMs > currentUpdateMs) {
+            break
+          }
+
+          // FIX CONC-04: Tombstone guard — delete vs update conflict resolution.
           if (existing.deleted && existing._deletedClientTimestamp) {
             const deleteMs = isoToMs(existing._deletedClientTimestamp)
-            const updateMs = eventMs(event)
-            if (deleteMs >= updateMs) {
+            if (deleteMs >= currentUpdateMs) {
               // Delete is same time or newer → delete intent wins, skip update
               break
             }
@@ -181,12 +174,17 @@ export function applyEvent(state: ReplayedState, event: EventDoc): void {
               deleted:                   false,
               deletedAt:                 undefined,
               _deletedClientTimestamp:   undefined,
+              _updatedClientTimestamp:   event.clientTimestamp ?? event.createdAt ?? new Date().toISOString(),
             }
             break
           }
 
           // Normal update (expense not deleted)
-          state.expenses[idx] = { ...existing, ...(data as Expense) }
+          state.expenses[idx] = {
+            ...existing,
+            ...(data as Expense),
+            _updatedClientTimestamp: event.clientTimestamp ?? event.createdAt ?? new Date().toISOString(),
+          }
           break
         }
 
@@ -213,7 +211,12 @@ export function applyEvent(state: ReplayedState, event: EventDoc): void {
         case 'INCOME_CREATED': {
           if (!data.id) break
           const exists = state.incomes.some(i => i.id === data.id)
-          if (!exists) state.incomes.push(data as Income)
+          if (!exists) {
+            state.incomes.push({
+              ...(data as Income),
+              _updatedClientTimestamp: event.clientTimestamp ?? event.createdAt ?? new Date().toISOString(),
+            })
+          }
           break
         }
 
@@ -243,6 +246,7 @@ export function applyEvent(state: ReplayedState, event: EventDoc): void {
               name:     data.name || data.title || '',
               deposits: Array.isArray(data.deposits) ? data.deposits : [],
               deleted:  false,
+              _updatedClientTimestamp: event.clientTimestamp ?? event.createdAt ?? new Date().toISOString(),
             })
           }
           break
@@ -253,10 +257,25 @@ export function applyEvent(state: ReplayedState, event: EventDoc): void {
           const idx = state.goals.findIndex(g => g.id === data.id)
           if (idx !== -1 && (!state.goals[idx].userId || state.goals[idx].userId === userId)) {
             const existing = state.goals[idx]
+            
+            // LWW check
+            const existingUpdateMs = existing._updatedClientTimestamp
+              ? isoToMs(existing._updatedClientTimestamp)
+              : existing.createdTimestamp * 1000
+            const currentUpdateMs = eventMs(event)
+            if (existingUpdateMs > currentUpdateMs) {
+              break
+            }
+
             const deposits = data.deposits !== undefined
               ? (data.deposits as Goal['deposits'])
               : existing.deposits
-            state.goals[idx] = { ...existing, ...(data as Partial<Goal>), deposits }
+            state.goals[idx] = {
+              ...existing,
+              ...(data as Partial<Goal>),
+              deposits,
+              _updatedClientTimestamp: event.clientTimestamp ?? event.createdAt ?? new Date().toISOString(),
+            }
           }
           break
         }
@@ -341,6 +360,7 @@ export function applyEvent(state: ReplayedState, event: EventDoc): void {
               ...(data as Debt),
               payments: Array.isArray(data.payments) ? data.payments : [],
               deleted:  false,
+              _updatedClientTimestamp: event.clientTimestamp ?? event.createdAt ?? new Date().toISOString(),
             })
           }
           break
@@ -362,10 +382,21 @@ export function applyEvent(state: ReplayedState, event: EventDoc): void {
               state.debts[idx] = { ...existing, payments: existing.payments.filter((p: DebtPayment) => p.id !== data.paymentDelete) }
               break
             }
+
+            // LWW check
+            const existingUpdateMs = existing._updatedClientTimestamp
+              ? isoToMs(existing._updatedClientTimestamp)
+              : existing.createdAt * 1000
+            const currentUpdateMs = eventMs(event)
+            if (existingUpdateMs > currentUpdateMs) {
+              break
+            }
+
             state.debts[idx] = {
               ...existing,
               ...(data as Partial<Debt>),
               payments: Array.isArray(data.payments) ? data.payments : existing.payments,
+              _updatedClientTimestamp: event.clientTimestamp ?? event.createdAt ?? new Date().toISOString(),
             }
           }
           break
@@ -411,7 +442,12 @@ export function applyEvent(state: ReplayedState, event: EventDoc): void {
         case 'TEMPLATE_CREATED': {
           if (!data.id) break
           const exists = state.templates.some(t => t.id === data.id)
-          if (!exists) state.templates.push(data as Template)
+          if (!exists) {
+            state.templates.push({
+              ...(data as Template),
+              _updatedClientTimestamp: event.clientTimestamp ?? event.createdAt ?? new Date().toISOString(),
+            })
+          }
           break
         }
 
@@ -543,6 +579,18 @@ export function applyEvent(state: ReplayedState, event: EventDoc): void {
 export function replay(events: EventDoc[]): ReplayedState {
   const state  = emptyState()
   const sorted = sortEvents(events)
+  for (const event of sorted) {
+    applyEvent(state, event)
+  }
+  return state
+}
+
+export function replayFromSnapshot(
+  snapshotState: ReplayedState,
+  eventsAfterSnapshot: EventDoc[],
+): ReplayedState {
+  const state = structuredClone(snapshotState)
+  const sorted = sortEvents(eventsAfterSnapshot)
   for (const event of sorted) {
     applyEvent(state, event)
   }

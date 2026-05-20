@@ -15,6 +15,7 @@ import { DebtAlerts } from '@/components/dashboard/debt-alerts'
 import { RecentExpenses } from '@/components/dashboard/recent-expenses'
 import { DashboardSkeleton } from '@/components/dashboard/dashboard-skeleton'
 import { QuickAddFab } from '@/components/dashboard/quick-add-fab'
+import { AiSummaryWidget } from '@/components/ai/AiSummaryWidget'
 
 import { calcCashflow } from '@/lib/utils/budgetCalc'
 import { computeTotalDeposited } from '@/lib/types/savings'
@@ -93,6 +94,9 @@ export default function DashboardPage() {
       {alertDebts.length > 0 && (
         <DebtAlerts debts={alertDebts} moneyHidden={moneyHidden} />
       )}
+
+      {/* AI summary */}
+      <AiSummaryWidget monthKey={currentMonth} />
 
       {/* Recent expenses */}
       <RecentExpenses expenses={monthExpenses} moneyHidden={moneyHidden} />

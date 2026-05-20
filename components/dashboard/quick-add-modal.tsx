@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { FormField, Input } from '@/components/ui/input'
 import { AmountInput } from '@/components/ui/amount-input'
 import { DatePicker } from '@/components/ui/date-picker'
+import { ReceiptScanner } from '@/components/ai/ReceiptScanner'
 import { useAppend } from '@/hooks/useAppend'
 import { useToast } from '@/hooks/useToast'
 import { useAuthStore } from '@/lib/store/authStore'
@@ -19,6 +20,7 @@ import { CATEGORIES, type CategoryValue } from '@/lib/types/expense'
 import { EVENT_TYPES } from '@/lib/types/events'
 import { parseAmount } from '@/lib/utils/currency'
 import { cn } from '@/lib/utils/cn'
+import type { ScanResult } from '@/hooks/useReceiptScan'
 
 const amountSchema = z.string()
   .min(1, 'Nhập số tiền.')
@@ -83,6 +85,16 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
 
   const handleClose = () => { reset(); onClose() }
 
+  // Nhận kết quả từ AI scanner — QuickAddModal dùng setSelectedCategory (useState)
+  // thay vì setValue('category'), nên phải handle cả 2 setter.
+  const handleScanResult = useCallback((result: ScanResult) => {
+    if (result.amount !== null) setValue('amount', String(result.amount))
+    if (result.date)            setValue('date',   result.date)
+    if (result.category)        setSelectedCategory(result.category as CategoryValue)
+    if (result.title)           setValue('title',  result.title)
+    if (result.note)            setValue('note',   result.note)
+  }, [setValue])
+
   const onSubmit = async (values: FormValues) => {
     const amount = parseAmount(values.amount)
     const date   = values.date
@@ -128,6 +140,11 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
   return (
     <Modal open={open} onClose={handleClose} title="Thêm nhanh" variant="center">
       <form onSubmit={handleSubmit(onSubmit)} className="px-4 pb-6 space-y-4">
+        {/* AI Receipt Scanner — chỉ hiện ở tab Chi tiêu */}
+        {tab === 'expense' && (
+          <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting || isPending} />
+        )}
+
         {/* Tab switch */}
         <div className="flex bg-muted rounded-lg p-1 mt-2">
           {(['expense', 'income'] as const).map(t => (

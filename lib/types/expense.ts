@@ -49,6 +49,7 @@ export interface Expense {
    * Xem: replay.ts CONC-04 tombstone guard.
    */
   _deletedClientTimestamp?: string
+  _updatedClientTimestamp?: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

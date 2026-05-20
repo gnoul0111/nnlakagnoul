@@ -10,4 +10,5 @@ export interface Template {
   deleted?: boolean
 
   _deletedClientTimestamp?: string
+  _updatedClientTimestamp?: string
 }

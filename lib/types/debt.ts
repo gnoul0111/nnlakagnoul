@@ -25,6 +25,7 @@ export interface Debt {
   createdAt: number     // Unix seconds
 
   _deletedClientTimestamp?: string
+  _updatedClientTimestamp?: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
