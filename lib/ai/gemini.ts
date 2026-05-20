@@ -9,6 +9,6 @@ function getClient(): GoogleGenerativeAI {
 }
 
 /** Model cho vision (quét hóa đơn) và text (tóm tắt tài chính) */
-export function getGeminiModel(model = 'gemini-1.5-flash') {
+export function getGeminiModel(model = 'gemini-2.5-flash') {
   return getClient().getGenerativeModel({ model })
 }

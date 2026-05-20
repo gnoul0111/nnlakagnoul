@@ -14,7 +14,8 @@
       "Bash(Select-Object Name, PSIsContainer)",
       "PowerShell(cd \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\"; Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"cd 'c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app'; npm run dev\" -WindowStyle Normal)",
       "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing -TimeoutSec 5)",
-      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3000/\" -UseBasicParsing -TimeoutSec 10)"
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3000/\" -UseBasicParsing -TimeoutSec 10)",
+      "Bash(node -e ' *)"
     ]
   }
 }
