@@ -157,7 +157,12 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
     <Modal variant="center" open={open} onClose={onClose}
       title={editExpense ? 'Sửa chi tiêu' : copyFrom ? 'Sao chép chi tiêu' : 'Thêm chi tiêu'}>
       <form onSubmit={handleSubmit(onSubmit)} className="px-4 pb-6 space-y-4">
-        {/* Category grid */}
+        {/* AI Receipt Scanner — đầu form, ẩn khi copy */}
+        {!copyFrom && (
+          <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting} />
+        )}
+
+        {/* Danh mục */}
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-2">Danh mục</p>
           <div className="grid grid-cols-4 gap-2">
@@ -177,17 +182,12 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
           {errors.category && <p className="text-xs text-destructive mt-1">{errors.category.message}</p>}
         </div>
 
-        {/* AI Receipt Scanner — sau danh mục, trước form fields; ẩn khi copy */}
-        {!copyFrom && (
-          <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting} />
-        )}
+        <FormField label="Tiêu đề">
+          <Input placeholder="VD: Ăn trưa, Xăng xe..." {...register('title')} />
+        </FormField>
 
         <FormField label="Số tiền (₫)" error={errors.amount?.message} required>
           <AmountInput placeholder="0" autoFocus {...register('amount')} />
-        </FormField>
-
-        <FormField label="Tiêu đề">
-          <Input placeholder="VD: Ăn trưa, Xăng xe..." {...register('title')} />
         </FormField>
 
         <div className="grid grid-cols-2 gap-3">

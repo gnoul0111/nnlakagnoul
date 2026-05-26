@@ -153,11 +153,12 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
           ))}
         </div>
 
-        {/* AI Receipt Scanner — hiện sau tab switch, chỉ ở tab Chi tiêu */}
+        {/* AI Receipt Scanner — chỉ Chi tiêu */}
         {tab === 'expense' && (
           <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting || isPending} />
         )}
 
+        {/* Danh mục — chỉ Chi tiêu */}
         {tab === 'expense' && (
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Danh mục</p>
@@ -186,7 +187,7 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
 
         {tab === 'income' && (
           <FormField label="Nguồn thu" error={errors.source?.message} required>
-            <Input placeholder="Lương, Freelance, ..." autoFocus {...register('source')} />
+            <Input placeholder="Lương, Freelance, ..." {...register('source')} />
           </FormField>
         )}
 
