@@ -157,11 +157,6 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
     <Modal variant="center" open={open} onClose={onClose}
       title={editExpense ? 'Sửa chi tiêu' : copyFrom ? 'Sao chép chi tiêu' : 'Thêm chi tiêu'}>
       <form onSubmit={handleSubmit(onSubmit)} className="px-4 pb-6 space-y-4">
-        {/* AI Receipt Scanner — chỉ hiện khi thêm mới hoặc chỉnh sửa, không hiện khi copy */}
-        {!copyFrom && (
-          <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting} />
-        )}
-
         {/* Category grid */}
         <div>
           <p className="text-xs font-medium text-muted-foreground mb-2">Danh mục</p>
@@ -181,6 +176,11 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
           </div>
           {errors.category && <p className="text-xs text-destructive mt-1">{errors.category.message}</p>}
         </div>
+
+        {/* AI Receipt Scanner — sau danh mục, trước form fields; ẩn khi copy */}
+        {!copyFrom && (
+          <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting} />
+        )}
 
         <FormField label="Số tiền (₫)" error={errors.amount?.message} required>
           <AmountInput placeholder="0" autoFocus {...register('amount')} />

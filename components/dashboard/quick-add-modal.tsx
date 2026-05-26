@@ -140,13 +140,8 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
   return (
     <Modal open={open} onClose={handleClose} title="Thêm nhanh" variant="center">
       <form onSubmit={handleSubmit(onSubmit)} className="px-4 pb-6 space-y-4">
-        {/* AI Receipt Scanner — chỉ hiện ở tab Chi tiêu */}
-        {tab === 'expense' && (
-          <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting || isPending} />
-        )}
-
-        {/* Tab switch */}
-        <div className="flex bg-muted rounded-lg p-1 mt-2">
+        {/* Tab switch — luôn hiện đầu tiên để user chọn loại */}
+        <div className="flex bg-muted rounded-lg p-1">
           {(['expense', 'income'] as const).map(t => (
             <button key={t} type="button" onClick={() => setTab(t)}
               className={cn(
@@ -157,6 +152,11 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
             </button>
           ))}
         </div>
+
+        {/* AI Receipt Scanner — hiện sau tab switch, chỉ ở tab Chi tiêu */}
+        {tab === 'expense' && (
+          <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting || isPending} />
+        )}
 
         {tab === 'expense' && (
           <div>
