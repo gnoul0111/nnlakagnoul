@@ -53,7 +53,7 @@ export function AiSummaryWidget({ monthKey, className }: AiSummaryWidgetProps) {
       {/* Idle — CTA */}
       {summaryStatus === 'idle' && (
         <button
-          onClick={generateSummary}
+          onClick={() => generateSummary()}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-primary/5 text-sm text-muted-foreground hover:text-primary transition-colors"
         >
           <MicIcon />
