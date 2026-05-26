@@ -23,6 +23,7 @@ const RECEIPT_SCHEMA: Schema = {
     },
     category: {
       type: SchemaType.STRING,
+      format: 'enum',
       enum: ['food', 'transport', 'shopping', 'entertainment', 'bills', 'health', 'education', 'other'],
       description: 'Danh mục phù hợp nhất với nội dung hóa đơn.',
     },
