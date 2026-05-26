@@ -13,8 +13,9 @@ export interface ScanResult {
 
 type ScanStatus = 'idle' | 'scanning' | 'done' | 'error'
 
-// Resize ảnh client-side trước khi upload — giảm băng thông, tránh vượt 4MB
-async function compressImage(file: File, maxDim = 1024, quality = 0.85): Promise<Blob> {
+// Luôn convert sang JPEG (xử lý HEIC từ iPhone) + resize nếu cần
+// maxDim=1536 giữ chữ trên hóa đơn đủ rõ để AI OCR
+async function compressImage(file: File, maxDim = 1536, quality = 0.9): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
@@ -62,10 +63,8 @@ export function useReceiptScan() {
     setErrorMsg(null)
 
     try {
-      // Compress nếu ảnh lớn hơn 2MB
-      const blob = file.size > 2 * 1024 * 1024
-        ? await compressImage(file)
-        : file
+      // Luôn compress để đảm bảo định dạng JPEG chuẩn (HEIC từ iPhone sẽ được convert)
+      const blob = await compressImage(file)
 
       const formData = new FormData()
       formData.append('image', blob, 'receipt.jpg')

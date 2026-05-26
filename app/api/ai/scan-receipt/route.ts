@@ -70,16 +70,19 @@ export async function POST(request: NextRequest) {
     const bytes  = await file.arrayBuffer()
     const base64 = Buffer.from(bytes).toString('base64')
 
-    const model  = getGeminiModel()
+    // Client luôn compress sang JPEG — dùng 'image/jpeg' cứng để tránh mismatch
+    const model  = getGeminiModel({ temperature: 0 })
     const result = await model.generateContent([
-      { inlineData: { mimeType: mimeType as string, data: base64 } },
+      { inlineData: { mimeType: 'image/jpeg', data: base64 } },
       { text: PROMPT },
     ])
 
     const raw = result.response.text().trim()
 
-    // Strip markdown code blocks nếu có
-    const jsonText = raw.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim()
+    // Tìm JSON object trong response — handles markdown blocks và thinking output
+    const stripped  = raw.replace(/^```(?:json)?\n?/im, '').replace(/\n?```$/im, '').trim()
+    const jsonMatch = stripped.match(/\{[\s\S]*\}/)
+    const jsonText  = jsonMatch ? jsonMatch[0] : stripped
 
     let parsed: Record<string, unknown>
     try {

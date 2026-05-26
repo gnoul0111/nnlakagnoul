@@ -9,6 +9,9 @@ function getClient(): GoogleGenerativeAI {
 }
 
 /** Model cho vision (quét hóa đơn) và text (tóm tắt tài chính) */
-export function getGeminiModel(model = 'gemini-2.5-flash') {
-  return getClient().getGenerativeModel({ model })
+export function getGeminiModel(config?: { temperature?: number }) {
+  return getClient().getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    ...(config ? { generationConfig: config } : {}),
+  })
 }

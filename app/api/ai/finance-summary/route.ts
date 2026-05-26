@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const model  = getGeminiModel()
+    const model  = getGeminiModel({ temperature: 0.7 })
     const result = await model.generateContent(buildPrompt(data))
     const summary = result.response.text().trim()
 

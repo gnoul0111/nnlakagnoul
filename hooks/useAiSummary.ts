@@ -12,6 +12,9 @@ import type { FinanceSummaryInput } from '@/app/api/ai/finance-summary/route'
 export type SummaryStatus = 'idle' | 'loading' | 'done' | 'error'
 export type TtsStatus     = 'idle' | 'speaking' | 'paused'
 
+// In-session cache per monthKey — clears on page refresh, avoids repeated API calls
+const summaryCache = new Map<string, string>()
+
 export function useAiSummary(monthKey: string) {
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>('idle')
   const [summary,       setSummary]       = useState<string | null>(null)
@@ -33,9 +36,7 @@ export function useAiSummary(monthKey: string) {
       ? Math.round((cashflow.spendingTotal / budgetAmount) * 100)
       : 0
 
-    // calcCategorySpending tự lọc nội bộ qua getSpendingExpenses()
-    // → chỉ cần pass toàn bộ expenses, không filter trước tránh double count
-    const topCategories   = calcCategorySpending(expenses, monthKey).slice(0, 4).map(c => ({
+    const topCategories = calcCategorySpending(expenses, monthKey).slice(0, 4).map(c => ({
       category: c.category,
       amount:   c.amount,
       percent:  c.percent,
@@ -51,7 +52,6 @@ export function useAiSummary(monthKey: string) {
         type:      d.type as string,
       }))
 
-    // Format month label tiếng Việt: "2025-05" → "tháng 5/2025"
     const [year, month] = monthKey.split('-')
     const monthLabel = `tháng ${parseInt(month)}/${year}`
 
@@ -90,7 +90,19 @@ export function useAiSummary(monthKey: string) {
 
   // ─── Generate summary ────────────────────────────────────────────────────────
 
-  const generateSummary = useCallback(async () => {
+  // force=true: bỏ qua cache và tạo lại (dùng cho nút "Tạo lại")
+  const generateSummary = useCallback(async (force = false) => {
+    if (!force) {
+      const cached = summaryCache.get(monthKey)
+      if (cached) {
+        setSummary(cached)
+        setSummaryStatus('done')
+        return
+      }
+    } else {
+      summaryCache.delete(monthKey)
+    }
+
     setSummaryStatus('loading')
     setSummaryError(null)
     stopSpeech()
@@ -109,28 +121,43 @@ export function useAiSummary(monthKey: string) {
         return
       }
 
+      summaryCache.set(monthKey, data.summary)
       setSummary(data.summary)
       setSummaryStatus('done')
     } catch {
       setSummaryError('Lỗi kết nối. Vui lòng thử lại.')
       setSummaryStatus('error')
     }
-  }, [financialData, stopSpeech])
+  }, [financialData, stopSpeech, monthKey])
 
   // ─── TTS ─────────────────────────────────────────────────────────────────────
 
-  const speak = useCallback((text: string) => {
+  const speak = useCallback(async (text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return
 
     stopSpeech()
 
     const utterance  = new SpeechSynthesisUtterance(text)
     utterance.lang   = 'vi-VN'
-    utterance.rate   = 0.92
+    utterance.rate   = 1.15
     utterance.pitch  = 1.0
 
-    // Chọn giọng tiếng Việt nếu có
-    const voices  = window.speechSynthesis.getVoices()
+    // getVoices() trả về mảng rỗng ngay khi trang load trên PC/Chrome.
+    // Phải chờ voiceschanged event để có danh sách giọng đầy đủ.
+    const voices = await new Promise<SpeechSynthesisVoice[]>(resolve => {
+      const v = window.speechSynthesis.getVoices()
+      if (v.length > 0) { resolve(v); return }
+      const tid = setTimeout(() => {
+        window.speechSynthesis.onvoiceschanged = null
+        resolve([])
+      }, 1500)
+      window.speechSynthesis.onvoiceschanged = () => {
+        clearTimeout(tid)
+        window.speechSynthesis.onvoiceschanged = null
+        resolve(window.speechSynthesis.getVoices())
+      }
+    })
+
     const viVoice = voices.find(v => v.lang === 'vi-VN') ?? voices.find(v => v.lang.startsWith('vi'))
     if (viVoice) utterance.voice = viVoice
 

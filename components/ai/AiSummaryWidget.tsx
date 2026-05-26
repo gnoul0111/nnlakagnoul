@@ -29,7 +29,7 @@ export function AiSummaryWidget({ monthKey, className }: AiSummaryWidgetProps) {
         {/* Nút tạo / tạo lại */}
         {!isLoading && (
           <button
-            onClick={generateSummary}
+            onClick={() => generateSummary(hasSummary)}
             className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
           >
             {hasSummary ? 'Tạo lại' : 'Tạo tóm tắt'}
