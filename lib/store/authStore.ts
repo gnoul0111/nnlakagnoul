@@ -8,30 +8,21 @@ import { removeCurrentDeviceToken } from '@/lib/services/settingsService'
 
 // ─── Session cookie helpers ───────────────────────────────────────────────────
 //
-// FIX S-04 + S-XSS: cookie được set server-side với HttpOnly flag.
-// Client gọi API route /api/auth/session để set/clear — server verify ID token trước.
-// HttpOnly ngăn JavaScript đọc cookie → XSS không steal được session.
+// Cookie này là "hint" cho middleware server-side, KHÔNG phải cơ chế bảo mật.
+// Bảo mật thực sự do Firebase Auth SDK + Firestore Rules + verifyIdToken() trên API routes.
+// Dùng client-side cookie để tránh race condition với redirect của auth layout.
 
-async function setSessionCookie(user: import('firebase/auth').User): Promise<void> {
-  if (typeof window === 'undefined') return
-  try {
-    const token = await user.getIdToken()
-    await fetch('/api/auth/session', {
-      method:  'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    })
-  } catch (err) {
-    console.warn('[authStore] setSessionCookie failed:', err)
-  }
+import { SESSION_COOKIE } from '@/middleware'
+
+function setSessionCookie(): void {
+  if (typeof document === 'undefined') return
+  const isSecure = location.protocol === 'https:'
+  document.cookie = `${SESSION_COOKIE}=1; path=/; SameSite=Strict${isSecure ? '; Secure' : ''}`
 }
 
-async function clearSessionCookie(): Promise<void> {
-  if (typeof window === 'undefined') return
-  try {
-    await fetch('/api/auth/session', { method: 'DELETE' })
-  } catch (err) {
-    console.warn('[authStore] clearSessionCookie failed:', err)
-  }
+function clearSessionCookie(): void {
+  if (typeof document === 'undefined') return
+  document.cookie = `${SESSION_COOKIE}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict`
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -55,13 +46,11 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
    * Returns unsubscribe function để cleanup.
    */
   initialize: () => {
-    const unsubscribe = onAuthChange(async (user) => {
+    const unsubscribe = onAuthChange(user => {
       if (user) {
-        // Await để đảm bảo cookie đã được set trước khi redirect xảy ra
-        // Nếu không await, middleware thấy không có cookie và redirect về login (race condition)
-        await setSessionCookie(user)
+        setSessionCookie()
       } else {
-        await clearSessionCookie()
+        clearSessionCookie()
       }
       set({ user, isLoading: false, isInitialized: true })
     })
@@ -114,7 +103,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       }
     }
 
-    await clearSessionCookie()
+    clearSessionCookie()
     await firebaseLogout()
     set({ user: null })
   },
