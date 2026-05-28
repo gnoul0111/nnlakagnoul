@@ -55,12 +55,13 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
    * Returns unsubscribe function để cleanup.
    */
   initialize: () => {
-    const unsubscribe = onAuthChange(user => {
+    const unsubscribe = onAuthChange(async (user) => {
       if (user) {
-        // Set HttpOnly cookie server-side — fire and forget, không block UI
-        setSessionCookie(user)
+        // Await để đảm bảo cookie đã được set trước khi redirect xảy ra
+        // Nếu không await, middleware thấy không có cookie và redirect về login (race condition)
+        await setSessionCookie(user)
       } else {
-        clearSessionCookie()
+        await clearSessionCookie()
       }
       set({ user, isLoading: false, isInitialized: true })
     })

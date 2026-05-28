@@ -33,6 +33,9 @@ const cspDirectives = [
 ].join('; ')
 
 const securityHeaders = [
+  // same-origin-allow-popups: cho phép Google sign-in popup communicate về app
+  // (Vercel mặc định set same-origin, block hoàn toàn → Google OAuth không hoạt động)
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
   // Ngăn app bị nhúng vào iframe trên domain khác → chống clickjacking
   { key: 'X-Frame-Options', value: 'DENY' },
   // Ngăn browser đoán content-type → chống MIME sniffing attacks
