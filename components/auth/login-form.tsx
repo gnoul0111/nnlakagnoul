@@ -7,7 +7,8 @@ import { z } from 'zod'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input, FormField, PasswordInput } from '@/components/ui/input'
-import { loginWithEmail, getAuthErrorMessage } from '@/lib/firebase/auth'
+import { loginWithEmail, logout, sendVerificationEmail, getAuthErrorMessage } from '@/lib/firebase/auth'
+import { GoogleSignInButton, OrDivider } from './google-sign-in-button'
 import { useToast } from '@/hooks/useToast'
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -36,10 +37,15 @@ export function LoginForm() {
   const onSubmit = async (values: FormValues) => {
     setServerError(null)
     try {
-      await loginWithEmail(values.email, values.password)
+      const user = await loginWithEmail(values.email, values.password)
+      if (!user.emailVerified) {
+        // Gửi lại email xác minh (xử lý cả user cũ chưa từng verify)
+        try { await sendVerificationEmail(user) } catch { /* bỏ qua nếu gửi thất bại */ }
+        await logout()
+        setServerError('Email chưa được xác minh. Em vừa gửi lại link xác minh — vui lòng kiểm tra hộp thư (kể cả Spam) rồi thử đăng nhập lại.')
+        return
+      }
       toast.success('Đăng nhập thành công!')
-      // Không redirect ở đây — onAuthStateChanged sẽ fire và (auth)/layout.tsx
-      // tự redirect về / khi user được set vào store.
     } catch (err) {
       const code = (err as { code?: string }).code ?? ''
       setServerError(getAuthErrorMessage(code))
@@ -47,6 +53,11 @@ export function LoginForm() {
   }
 
   return (
+    <div className="space-y-0">
+      {/* Google sign-in */}
+      <GoogleSignInButton label="Đăng nhập với Google" />
+      <OrDivider />
+
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
       {/* Server error banner */}
       {serverError && (
@@ -105,5 +116,6 @@ export function LoginForm() {
         </Link>
       </p>
     </form>
+    </div>
   )
 }

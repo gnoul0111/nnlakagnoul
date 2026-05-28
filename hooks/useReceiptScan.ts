@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import type { CategoryValue } from '@/lib/types/expense'
+import { authHeader } from '@/lib/auth/getIdToken'
 
 export interface ScanResult {
   amount:   number | null   // VND, null nếu không nhận diện được
@@ -69,9 +70,11 @@ export function useReceiptScan() {
       const formData = new FormData()
       formData.append('image', blob, 'receipt.jpg')
 
+      const headers = await authHeader()
       const res = await fetch('/api/ai/scan-receipt', {
-        method: 'POST',
-        body:   formData,
+        method:  'POST',
+        headers,
+        body:    formData,
       })
 
       const data = await res.json()

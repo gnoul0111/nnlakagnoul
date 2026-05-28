@@ -16,6 +16,16 @@ service cloud.firestore {
       return authed() && request.auth.uid == uid;
     }
 
+    // Query phải có filter đầu tiên là where('userId', '==', <my uid>)
+    // Cho phép compound queries (thêm filter khác sau userId) nhưng KHÔNG cho query không có userId filter
+    // Ngăn IDOR: user không thể list collection mà không filter theo chính mình
+    function queryOnlyMine() {
+      return request.query.filters.size() >= 1
+        && request.query.filters[0].field == 'userId'
+        && request.query.filters[0].op    == '=='
+        && request.query.filters[0].value == request.auth.uid;
+    }
+
     // userId KHÔNG được thay đổi sau khi tạo document
     // BUG GỐC: rules cũ thiếu check này → user có thể update userId sang người khác
     function userIdLocked() {
@@ -79,7 +89,7 @@ service cloud.firestore {
     //
     match /expense_events/{docId} {
       allow get:    if isMe(resource.data.userId);
-      allow list:   if authed();   // resource.data = null trong list context; query luôn có where('userId','==',uid)
+      allow list:   if queryOnlyMine();
       allow create: if isMe(request.resource.data.userId) && validEvent();
       allow update: if false;  // Events bất biến (immutable)
       allow delete: if false;  // Events bất biến (immutable)
@@ -96,7 +106,7 @@ service cloud.firestore {
     //
     match /expenses/{docId} {
       allow get:    if isMe(resource.data.userId);
-      allow list:   if authed();   // resource.data = null trong list context
+      allow list:   if queryOnlyMine();
       allow create: if isMe(request.resource.data.userId);
       allow update: if isMe(resource.data.userId) && userIdLocked();
       allow delete: if isMe(resource.data.userId);
@@ -104,7 +114,7 @@ service cloud.firestore {
 
     match /incomes/{docId} {
       allow get:    if isMe(resource.data.userId);
-      allow list:   if authed();   // resource.data = null trong list context
+      allow list:   if queryOnlyMine();
       allow create: if isMe(request.resource.data.userId);
       allow update: if isMe(resource.data.userId) && userIdLocked();
       allow delete: if isMe(resource.data.userId);
@@ -112,7 +122,7 @@ service cloud.firestore {
 
     match /debts/{docId} {
       allow get:    if isMe(resource.data.userId);
-      allow list:   if authed();   // resource.data = null trong list context
+      allow list:   if queryOnlyMine();
       allow create: if isMe(request.resource.data.userId);
       allow update: if isMe(resource.data.userId) && userIdLocked();
       allow delete: if isMe(resource.data.userId);
@@ -120,7 +130,7 @@ service cloud.firestore {
 
     match /goals/{docId} {
       allow get:    if isMe(resource.data.userId);
-      allow list:   if authed();   // resource.data = null trong list context
+      allow list:   if queryOnlyMine();
       allow create: if isMe(request.resource.data.userId);
       allow update: if isMe(resource.data.userId) && userIdLocked();
       allow delete: if isMe(resource.data.userId);
@@ -128,7 +138,7 @@ service cloud.firestore {
 
     match /templates/{docId} {
       allow get:    if isMe(resource.data.userId);
-      allow list:   if authed();   // resource.data = null trong list context
+      allow list:   if queryOnlyMine();
       allow create: if isMe(request.resource.data.userId);
       allow update: if isMe(resource.data.userId) && userIdLocked();
       allow delete: if isMe(resource.data.userId);
@@ -186,7 +196,7 @@ service cloud.firestore {
     //
     match /work_calendar/{docId} {
       allow get:    if isMe(resource.data.userId);
-      allow list:   if authed();   // resource.data = null trong list context
+      allow list:   if queryOnlyMine();
       allow create: if isMe(request.resource.data.userId);
       allow update: if isMe(resource.data.userId) && userIdLocked();
       allow delete: if isMe(resource.data.userId);

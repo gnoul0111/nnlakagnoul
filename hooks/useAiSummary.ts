@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useMemo } from 'react'
+import { authHeader } from '@/lib/auth/getIdToken'
 import { useAppData, useMonthData } from './useAppData'
 import { useBudget } from './useBudget'
 import { calcCashflow, calcCategorySpending } from '@/lib/utils/budgetCalc'
@@ -23,6 +24,7 @@ export function useAiSummary(monthKey: string) {
 
   const utteranceRef  = useRef<SpeechSynthesisUtterance | null>(null)
   const heartbeatRef  = useRef<ReturnType<typeof setInterval> | null>(null)
+  const audioRef      = useRef<HTMLAudioElement | null>(null)
 
   // ─── Data ────────────────────────────────────────────────────────────────────
   const { expenses, allIncomes: incomes, debts, goals } = useAppData()
@@ -123,6 +125,13 @@ export function useAiSummary(monthKey: string) {
 
   const stopSpeech = useCallback(() => {
     stopHeartbeat()
+    // Dừng Audio element (Google Cloud TTS)
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+      audioRef.current = null
+    }
+    // Dừng browser TTS nếu đang dùng fallback
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel()
     }
@@ -148,9 +157,10 @@ export function useAiSummary(monthKey: string) {
     stopSpeech()
 
     try {
+      const headers = await authHeader()
       const res  = await fetch('/api/ai/finance-summary', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body:    JSON.stringify(financialData),
       })
       const data = await res.json()
@@ -170,66 +180,81 @@ export function useAiSummary(monthKey: string) {
     }
   }, [financialData, stopSpeech, monthKey])
 
-  // ─── TTS ─────────────────────────────────────────────────────────────────────
+  // ─── TTS — Google Cloud Neural2 với fallback browser ─────────────────────────
 
   const speak = useCallback(async (text: string) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return
-
+    if (typeof window === 'undefined') return
     stopSpeech()
-
-    const utterance  = new SpeechSynthesisUtterance(text)
-    utterance.lang   = 'vi-VN'
-    utterance.rate   = 1.15
-    utterance.pitch  = 1.0
-
-    const voices = await new Promise<SpeechSynthesisVoice[]>(resolve => {
-      const v = window.speechSynthesis.getVoices()
-      if (v.length > 0) { resolve(v); return }
-      const tid = setTimeout(() => {
-        window.speechSynthesis.onvoiceschanged = null
-        resolve([])
-      }, 1500)
-      window.speechSynthesis.onvoiceschanged = () => {
-        clearTimeout(tid)
-        window.speechSynthesis.onvoiceschanged = null
-        resolve(window.speechSynthesis.getVoices())
-      }
-    })
-
-    const viVoice = voices.find(v => v.lang === 'vi-VN') ?? voices.find(v => v.lang.startsWith('vi'))
-    if (viVoice) utterance.voice = viVoice
-
-    utterance.onstart  = () => setTtsStatus('speaking')
-    utterance.onend    = () => { stopHeartbeat(); setTtsStatus('idle') }
-    utterance.onpause  = () => setTtsStatus('paused')
-    utterance.onresume = () => setTtsStatus('speaking')
-    utterance.onerror  = () => { stopHeartbeat(); setTtsStatus('idle') }
-
-    utteranceRef.current = utterance
-    window.speechSynthesis.speak(utterance)
     setTtsStatus('speaking')
 
-    heartbeatRef.current = setInterval(() => {
-      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-        window.speechSynthesis.pause()
-        window.speechSynthesis.resume()
-      }
-    }, 13000)
+    try {
+      // Gọi API server để lấy audio từ Google Cloud TTS Neural2
+      const headers = await authHeader()
+      const res = await fetch('/api/ai/tts', {
+        method:  'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ text }),
+      })
+
+      if (!res.ok) throw new Error(`TTS API ${res.status}`)
+
+      const { audio, mimeType } = await res.json()
+      const audioSrc = `data:${mimeType};base64,${audio}`
+
+      const el = new Audio(audioSrc)
+      audioRef.current = el
+      el.onended  = () => setTtsStatus('idle')
+      el.onerror  = () => setTtsStatus('idle')
+      await el.play()
+
+    } catch {
+      // Fallback: browser SpeechSynthesis khi API không khả dụng
+      if (!window.speechSynthesis) { setTtsStatus('idle'); return }
+
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.lang  = 'vi-VN'
+      utterance.rate  = 0.95
+
+      const voices = window.speechSynthesis.getVoices()
+      const viVoice = voices.find(v => v.lang === 'vi-VN') ?? voices.find(v => v.lang.startsWith('vi'))
+      if (viVoice) utterance.voice = viVoice
+
+      utterance.onend   = () => { stopHeartbeat(); setTtsStatus('idle') }
+      utterance.onerror = () => { stopHeartbeat(); setTtsStatus('idle') }
+      utteranceRef.current = utterance
+      window.speechSynthesis.speak(utterance)
+
+      // Heartbeat giữ browser TTS không bị ngắt giữa chừng trên một số browser
+      heartbeatRef.current = setInterval(() => {
+        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+          window.speechSynthesis.pause()
+          window.speechSynthesis.resume()
+        }
+      }, 13000)
+    }
   }, [stopSpeech, stopHeartbeat])
 
   const pauseSpeech = useCallback(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return
-    window.speechSynthesis.pause()
-    setTtsStatus('paused')
+    if (audioRef.current) {
+      audioRef.current.pause()
+      setTtsStatus('paused')
+    } else if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.pause()
+      setTtsStatus('paused')
+    }
   }, [])
 
   const resumeSpeech = useCallback(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return
-    window.speechSynthesis.resume()
-    setTtsStatus('speaking')
+    if (audioRef.current) {
+      audioRef.current.play().catch(() => setTtsStatus('idle'))
+      setTtsStatus('speaking')
+    } else if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.resume()
+      setTtsStatus('speaking')
+    }
   }, [])
 
-  const hasTts = typeof window !== 'undefined' && !!window.speechSynthesis
+  const hasTts = true // Google Cloud TTS luôn available khi đã login
 
   return {
     summaryStatus,

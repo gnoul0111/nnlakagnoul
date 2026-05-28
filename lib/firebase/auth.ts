@@ -1,12 +1,16 @@
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  getAdditionalUserInfo,
   signOut,
   updateProfile,
   updatePassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
   sendPasswordResetEmail,
+  sendEmailVerification,
   onAuthStateChanged,
   type User,
 } from 'firebase/auth'
@@ -30,6 +34,20 @@ const FIREBASE_ERROR_MAP: Record<string, string> = {
   // Signup
   'auth/email-already-in-use':   'Email này đã được sử dụng.',
   'auth/weak-password':          'Mật khẩu quá yếu (tối thiểu 8 ký tự, gồm chữ và số).',
+}
+
+const googleProvider = new GoogleAuthProvider()
+googleProvider.setCustomParameters({ prompt: 'select_account' })
+
+export interface GoogleSignInResult {
+  user:    User
+  isNewUser: boolean
+}
+
+export async function signInWithGoogle(): Promise<GoogleSignInResult> {
+  const result   = await signInWithPopup(auth, googleProvider)
+  const isNewUser = getAdditionalUserInfo(result)?.isNewUser ?? false
+  return { user: result.user, isNewUser }
 }
 
 export function getAuthErrorMessage(code: string): string {
@@ -70,6 +88,10 @@ export async function changePassword(
   const credential = EmailAuthProvider.credential(user.email, currentPassword)
   await reauthenticateWithCredential(user, credential)
   await updatePassword(user, newPassword)
+}
+
+export async function sendVerificationEmail(user: User): Promise<void> {
+  await sendEmailVerification(user)
 }
 
 // FIX S-08: resetPassword always resolves (caller shows success regardless)

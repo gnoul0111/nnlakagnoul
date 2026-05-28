@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { getGeminiModel } from '@/lib/ai/gemini'
 import { CATEGORIES } from '@/lib/types/expense'
+import { verifyIdToken } from '@/lib/auth/verifyToken'
+import { checkRateLimit } from '@/lib/rateLimit'
+import { logger } from '@/lib/logger'
 
 export const maxDuration = 30
 
@@ -32,6 +36,41 @@ export interface FinanceSummaryInput {
   netBalance:         number
   alertDebts:         { name: string; remaining: number; dueDate: string | null; type: string }[]
 }
+
+const AMOUNT_MAX = 1_000_000_000
+
+const FinanceSummarySchema = z.object({
+  monthLabel:        z.string().max(50).transform(s => s.replace(/[<>"'`]/g, '')),
+  isCurrentMonth:    z.boolean(),
+  daysInMonth:       z.number().int().min(28).max(31),
+  daysElapsed:       z.number().int().min(0).max(31),
+  totalIncome:       z.number().min(0).max(AMOUNT_MAX),
+  spendingTotal:     z.number().min(0).max(AMOUNT_MAX),
+  budgetAmount:      z.number().min(0).max(AMOUNT_MAX),
+  budgetPercent:     z.number().min(0).max(100000),
+  remainingBudget:   z.number().max(AMOUNT_MAX),
+  avgDailySpend:     z.number().min(0).max(AMOUNT_MAX),
+  projectedSpend:    z.number().min(0).max(AMOUNT_MAX),
+  totalTransactions: z.number().int().min(0).max(100000),
+  allCategories:     z.array(z.object({
+    category:          z.string().max(50),
+    amount:            z.number().min(0).max(AMOUNT_MAX),
+    percentOfSpending: z.number().min(0).max(100000),
+    percentOfIncome:   z.number().min(0).max(100000),
+  })).max(20),
+  savingsDeposited:  z.number().min(0).max(AMOUNT_MAX),
+  savingsTarget:     z.number().min(0).max(AMOUNT_MAX),
+  savingsPercent:    z.number().min(0).max(100000),
+  debtPaidTotal:     z.number().min(0).max(AMOUNT_MAX),
+  totalDebtRemaining:z.number().min(0).max(AMOUNT_MAX),
+  netBalance:        z.number().max(AMOUNT_MAX),
+  alertDebts:        z.array(z.object({
+    name:      z.string().max(100).transform(s => s.replace(/[<>"'`]/g, '')),
+    remaining: z.number().min(0).max(AMOUNT_MAX),
+    dueDate:   z.string().max(20).nullable(),
+    type:      z.string().max(20),
+  })).max(20),
+})
 
 function buildPrompt(data: FinanceSummaryInput): string {
   const fmt = (n: number) => new Intl.NumberFormat('vi-VN').format(Math.round(n)) + '₫'
@@ -126,18 +165,31 @@ Nguyên tắc bắt buộc:
 }
 
 export async function POST(request: NextRequest) {
-  if (!request.cookies.has('auth_session')) {
+  let uid: string
+  try {
+    const decoded = await verifyIdToken(request)
+    uid = decoded.uid
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const rl = checkRateLimit({ key: `${uid}:finance-summary`, limit: 20, windowMs: 60_000 })
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Quá nhiều yêu cầu. Vui lòng thử lại sau.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.resetAfter / 1000)) } },
+    )
+  }
+
   if (!process.env.GEMINI_API_KEY) {
-    console.error('[finance-summary] GEMINI_API_KEY chưa cấu hình')
+    logger.error('finance-summary', 'GEMINI_API_KEY chưa cấu hình')
     return NextResponse.json({ error: 'AI chưa được cấu hình.' }, { status: 503 })
   }
 
   let data: FinanceSummaryInput
   try {
-    data = await request.json()
+    const raw = await request.json()
+    data = FinanceSummarySchema.parse(raw) as FinanceSummaryInput
   } catch {
     return NextResponse.json({ error: 'Request không hợp lệ.' }, { status: 400 })
   }
@@ -153,7 +205,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ summary })
   } catch (err) {
-    console.error('[finance-summary] Error:', err)
+    logger.error('finance-summary', 'Unhandled error', err)
     return NextResponse.json({ error: 'Lỗi xử lý. Vui lòng thử lại.' }, { status: 500 })
   }
 }

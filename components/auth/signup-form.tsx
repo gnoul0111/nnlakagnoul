@@ -7,7 +7,8 @@ import { z } from 'zod'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input, FormField, PasswordInput } from '@/components/ui/input'
-import { signupWithEmail, getAuthErrorMessage } from '@/lib/firebase/auth'
+import { signupWithEmail, sendVerificationEmail, logout, getAuthErrorMessage } from '@/lib/firebase/auth'
+import { GoogleSignInButton, OrDivider } from './google-sign-in-button'
 import { upsertUserProfile } from '@/lib/services/settingsService'
 import { useToast } from '@/hooks/useToast'
 
@@ -56,7 +57,9 @@ type FormValues = z.infer<typeof schema>
 
 export function SignupForm() {
   const toast = useToast()
-  const [serverError, setServerError] = useState<string | null>(null)
+  const [serverError,    setServerError]    = useState<string | null>(null)
+  const [emailSent,      setEmailSent]      = useState(false)
+  const [verifiedEmail,  setVerifiedEmail]  = useState('')
 
   const {
     register,
@@ -80,16 +83,44 @@ export function SignupForm() {
         displayName: values.displayName,
         photoURL: null,
       })
-      toast.success('Đăng ký thành công! Chào mừng bạn.')
-      // Không redirect ở đây — onAuthStateChanged sẽ fire và (auth)/layout.tsx
-      // tự redirect về / khi user được set vào store.
+      // Gửi email xác minh trước khi logout
+      await sendVerificationEmail(user)
+      // Logout ngay — user phải xác minh email trước khi vào app
+      await logout()
+      setVerifiedEmail(values.email)
+      setEmailSent(true)
     } catch (err) {
       const code = (err as { code?: string }).code ?? ''
       setServerError(getAuthErrorMessage(code))
     }
   }
 
+  // Hiển thị màn hình "Kiểm tra email" sau khi đăng ký
+  if (emailSent) {
+    return (
+      <div className="text-center space-y-4">
+        <div className="text-4xl">📧</div>
+        <h2 className="text-lg font-semibold">Xác minh email của bạn</h2>
+        <p className="text-sm text-muted-foreground">
+          Đã gửi email xác minh đến <strong>{verifiedEmail}</strong>.
+          Vui lòng kiểm tra hộp thư và nhấn vào link xác minh trước khi đăng nhập.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Không thấy email? Kiểm tra thư mục Spam.
+        </p>
+        <Link href="/login" className="block text-sm text-primary font-medium hover:underline underline-offset-4">
+          Quay lại đăng nhập
+        </Link>
+      </div>
+    )
+  }
+
   return (
+    <div className="space-y-0">
+      {/* Google sign-in */}
+      <GoogleSignInButton label="Đăng ký với Google" />
+      <OrDivider />
+
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
       {/* Server error */}
       {serverError && (
@@ -164,5 +195,6 @@ export function SignupForm() {
         </Link>
       </p>
     </form>
+    </div>
   )
 }

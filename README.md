@@ -29,7 +29,7 @@ npm install
 2. Tạo xong → vào **Project Settings → Your apps → Add app → Web**
 3. Copy Firebase config (sẽ dùng ở bước tiếp theo)
 4. Bật các services cần thiết:
-   - **Authentication** → Sign-in method → **Google**
+   - **Authentication** → Sign-in method → **Email/Password** → Enable
    - **Firestore Database** → Create database → Production mode
    - **Cloud Messaging** (FCM) → tự động bật khi tạo project
 
@@ -39,10 +39,10 @@ npm install
 cp .env.example .env.local
 ```
 
-Mở `.env.local` và điền giá trị từ Firebase config của anh:
+Mở `.env.local` và điền đầy đủ các giá trị sau:
 
 ```env
-# Lấy từ: Firebase Console → Project Settings → Your apps → Web app → SDK setup
+# ── Firebase client (lấy từ: Firebase Console → Project Settings → Your apps → Web app)
 NEXT_PUBLIC_FIREBASE_API_KEY=
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=
@@ -51,16 +51,21 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
 
-# Lấy từ: Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Key pair
+# ── FCM (lấy từ: Firebase Console → Project Settings → Cloud Messaging → Web Push certificates)
 NEXT_PUBLIC_FIREBASE_VAPID_KEY=
 
-# Lấy từ: Google Cloud Console → reCAPTCHA Enterprise → Create key → Website (Score)
-# Xem hướng dẫn chi tiết ở phần "Cấu hình App Check" bên dưới
+# ── App Check (xem hướng dẫn chi tiết ở phần "Cấu hình App Check" bên dưới)
 NEXT_PUBLIC_RECAPTCHA_SITE_KEY=
+NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN=   # chỉ dùng local — lấy từ Firebase Console → App Check → Manage debug tokens
 
-# Chỉ dùng khi chạy local — KHÔNG commit giá trị thật lên git
-# Lấy từ: Firebase Console → App Check → Apps → Manage debug tokens → Add token
-NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN=
+# ── Firebase Admin SDK — server-side only, KHÔNG thêm NEXT_PUBLIC_
+# Lấy từ: Firebase Console → Project Settings → Service accounts → Generate new private key
+# Paste toàn bộ nội dung file JSON vào đây
+FIREBASE_ADMIN_CREDENTIALS='{"type":"service_account",...}'
+
+# ── Gemini AI — server-side only
+# Lấy từ: https://aistudio.google.com
+GEMINI_API_KEY=
 ```
 
 > ⚠️ File `.env.local` đã có trong `.gitignore`, sẽ không bị commit lên git.
@@ -150,13 +155,17 @@ Mở [http://localhost:3000](http://localhost:3000).
 ├── lib/
 │   ├── engine/
 │   │   └── replay.ts    # ⭐ Event sourcing engine
-│   ├── firebase/        # config, auth, appCheck
+│   ├── firebase/        # config, auth, appCheck, admin (server-side)
+│   ├── auth/            # verifyToken, getIdToken (server/client helpers)
 │   ├── services/        # Data layer (Firestore)
 │   ├── store/           # Zustand stores
 │   ├── types/           # TypeScript interfaces
-│   └── utils/           # currency, date, id, cn...
+│   ├── utils/           # currency, date, id, cn...
+│   ├── rateLimit.ts     # In-memory rate limiter cho API routes
+│   └── logger.ts        # Structured logging (production-safe)
 │
 ├── hooks/               # Custom React hooks
+├── __tests__/           # Firestore security rules unit tests
 ├── sw.ts                # Service Worker (Serwist)
 └── public/
     ├── manifest.json
@@ -172,17 +181,16 @@ Mở [http://localhost:3000](http://localhost:3000).
 1. Push code lên GitHub
 2. Vào [vercel.com](https://vercel.com) → **Add New Project** → Import repo GitHub
 3. Vercel tự detect Next.js, không cần config gì thêm
-4. Thêm toàn bộ env vars vào **Vercel Dashboard → Project → Settings → Environment Variables**:
-   - Tất cả `NEXT_PUBLIC_*` từ `.env.local`
-   - Thêm `FIREBASE_SERVICE_ACCOUNT_KEY` — xem bên dưới
+4. Thêm env vars vào **Vercel Dashboard → Project → Settings → Environment Variables**:
 
-**Lấy Service Account Key:**
-```
-Firebase Console → Project Settings → Service Accounts → Generate new private key
-→ Tải file JSON về
-→ Minify thành 1 dòng: node -e "console.log(JSON.stringify(require('./key.json')))"
-→ Paste vào Vercel env var FIREBASE_SERVICE_ACCOUNT_KEY
-```
+| Key | Lấy từ đâu | Environment |
+|-----|-----------|-------------|
+| Tất cả `NEXT_PUBLIC_*` | `.env.local` | Production + Preview |
+| `FIREBASE_ADMIN_CREDENTIALS` | Firebase Console → Project Settings → Service accounts → Generate new private key → paste nguyên file JSON | Production + Preview |
+| `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com) | Production + Preview |
+| `APP_ORIGIN` | Domain Vercel của app, vd: `https://your-app.vercel.app` | Production |
+
+> ⚠️ `FIREBASE_ADMIN_CREDENTIALS` và `GEMINI_API_KEY` là secret — Vercel sẽ tự encrypt và ẩn sau khi save.
 
 ### Deploy thường ngày
 
@@ -191,6 +199,31 @@ Firebase Console → Project Settings → Service Accounts → Generate new priv
 ```
 
 Script tự động: commit → push GitHub → Vercel build → gửi push notification cho users.
+
+---
+
+## Scripts
+
+```bash
+npm run dev              # Dev server
+npm run build            # Production build
+npm run test             # Unit tests
+npm run test:rules       # Firestore security rules tests (cần Firebase Emulator)
+npm run security:scan    # Quét secret trong toàn bộ codebase
+npm run security:audit   # Kiểm tra dependency vulnerabilities (HIGH+)
+```
+
+> `security:scan` và `security:audit` cũng tự động chạy trước mỗi `git commit` qua husky hook.
+
+---
+
+## Checklist bảo mật — trước khi merge PR
+
+- [ ] API route mới có verify Firebase ID token không? (`verifyIdToken` từ `lib/auth/verifyToken.ts`)
+- [ ] Input từ user có validate bằng Zod không?
+- [ ] Có rate limit nếu route gọi API bên ngoài (Gemini, v.v.) không?
+- [ ] Không có secret/key nào hardcode trong code không?
+- [ ] Nếu thêm Firestore collection mới → đã update `firestore.rules` và `__tests__/firestore.rules.test.ts` chưa?
 
 ---
 

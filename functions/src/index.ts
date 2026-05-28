@@ -17,6 +17,9 @@ const geminiApiKey = defineSecret('GEMINI_API_KEY')
 admin.initializeApp()
 const db = getFirestore()
 
+// In-memory rate limit store cho notifyNewVersion endpoint
+const ipRateLimitStore = new Map<string, { count: number; windowEnd: number }>()
+
 // ─── Timezone ─────────────────────────────────────────────────────────────────
 
 const TZ = 'Asia/Ho_Chi_Minh'
@@ -712,8 +715,9 @@ export const notifyNewVersion = functions
   .region('asia-southeast1')
   .runWith({ secrets: [notifySecret] })
   .https.onRequest(async (req, res) => {
-    // CORS cho manual trigger từ browser nếu cần
-    res.set('Access-Control-Allow-Origin', '*')
+    // CORS chỉ cho phép app domain — không dùng wildcard (*)
+    const allowedOrigin = process.env.APP_ORIGIN ?? 'https://expense-app-tau-six.vercel.app'
+    res.set('Access-Control-Allow-Origin', allowedOrigin)
     res.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
     res.set('Access-Control-Allow-Headers', 'Content-Type')
 
@@ -725,6 +729,26 @@ export const notifyNewVersion = functions
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' })
       return
+    }
+
+    // Rate limit theo IP: tối đa 10 lần/giờ — ngăn brute force secret
+    const ip = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim()
+      ?? req.socket?.remoteAddress
+      ?? 'unknown'
+    const rateLimitKey = `notifyNewVersion:${ip}`
+    const now = Date.now()
+    const WINDOW_MS = 60 * 60 * 1000  // 1 giờ
+    const MAX_ATTEMPTS = 10
+
+    const entry = ipRateLimitStore.get(rateLimitKey)
+    if (entry && now < entry.windowEnd) {
+      if (entry.count >= MAX_ATTEMPTS) {
+        res.status(429).json({ error: 'Too many requests' })
+        return
+      }
+      entry.count++
+    } else {
+      ipRateLimitStore.set(rateLimitKey, { count: 1, windowEnd: now + WINDOW_MS })
     }
 
     // Xác thực qua secret — tránh kẻ lạ gọi API này gửi spam

@@ -36,9 +36,28 @@ Info "Version : $version"
 Info "Time    : $buildTime"
 Write-Host ""
 
+# ---- Step 0: Security scan ----
+
+Step 1 4 "Kiem tra secret trong code..."
+
+try {
+    $scanResult = npx secretlint "**/*" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Fail "Phat hien secret bi lo trong code!"
+        Write-Host $scanResult
+        Fail "Deploy bi huy. Xoa secret truoc khi deploy."
+        exit 1
+    }
+    OK "Khong phat hien secret bi lo."
+} catch {
+    Warn "Khong chay duoc secretlint: $($_.Exception.Message)"
+}
+
+Write-Host ""
+
 # ---- Step 1: Git ----
 
-Step 1 3 "Git commit va push..."
+Step 2 4 "Git commit va push..."
 
 $status = git status --porcelain 2>$null
 $skipGit = $false
@@ -84,7 +103,7 @@ Write-Host ""
 
 # ---- Step 2: Doi Vercel build ----
 
-Step 2 3 "Doi Vercel build (${WAIT_SECONDS}s)..."
+Step 3 4 "Doi Vercel build (${WAIT_SECONDS}s)..."
 Info "Vercel tu dong detect commit moi va build."
 
 $elapsed = 0
@@ -111,7 +130,7 @@ Write-Host ""
 
 # ---- Step 3: Push notification ----
 
-Step 3 3 "Gui push notification..."
+Step 4 4 "Gui push notification..."
 
 try {
     $secret = firebase functions:secrets:access NOTIFY_SECRET 2>$null

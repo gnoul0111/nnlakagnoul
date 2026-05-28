@@ -23,6 +23,12 @@ import type { NextRequest } from 'next/server'
 // Cookie name phải khớp với authStore.ts
 export const SESSION_COOKIE = 'auth_session'
 
+// Chỉ cho phép redirect tới internal route (bắt đầu bằng / nhưng không phải //)
+// Ngăn open redirect: attacker craft ?redirect=//evil.com hoặc ?redirect=https://evil.com
+function isSafeRedirect(path: string): boolean {
+  return typeof path === 'string' && path.startsWith('/') && !path.startsWith('//')
+}
+
 // Routes yêu cầu đăng nhập
 const PROTECTED_PREFIXES = ['/', '/finance', '/analytics', '/calendar', '/settings']
 
@@ -48,8 +54,9 @@ export function middleware(request: NextRequest) {
   // Chưa đăng nhập → vào protected route → redirect login
   if (isProtected(pathname) && !hasSession) {
     const loginUrl = new URL('/login', request.url)
-    // Giữ lại destination để redirect sau khi login thành công
-    loginUrl.searchParams.set('redirect', pathname)
+    if (isSafeRedirect(pathname)) {
+      loginUrl.searchParams.set('redirect', pathname)
+    }
     return NextResponse.redirect(loginUrl)
   }
 

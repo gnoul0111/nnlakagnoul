@@ -1,0 +1,2 @@
+# Secret scanning — ngăn commit chứa API keys, private keys, tokens
+npx secretlint "**/*"

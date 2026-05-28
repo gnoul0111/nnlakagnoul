@@ -18,7 +18,8 @@ export default function AuthGroupLayout({ children }: { children: React.ReactNod
     if (isInitialized && user) {
       const params = new URLSearchParams(window.location.search)
       const redirect = params.get('redirect')
-      router.replace(redirect && redirect.startsWith('/') ? redirect : '/')
+      const safeRedirect = redirect && redirect.startsWith('/') && !redirect.startsWith('//')
+      router.replace(safeRedirect ? redirect : '/')
     }
   }, [user, isInitialized, router])
 
