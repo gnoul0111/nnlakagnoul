@@ -23,13 +23,18 @@ cd chitieu-app
 npm install
 ```
 
+> Repo có sẵn `.npmrc` với `legacy-peer-deps=true`. Đây là chủ ý: `@firebase/rules-unit-testing`
+> yêu cầu `firebase@^12` nhưng app dùng `firebase@11` — flag này cho phép cài chung mà không lỗi
+> peer-dependency. Đừng xóa, nếu không `npm install` (kể cả trên Vercel) sẽ fail.
+
 ### 2. Tạo Firebase project
 
 1. Vào [Firebase Console](https://console.firebase.google.com) → **Add project**
 2. Tạo xong → vào **Project Settings → Your apps → Add app → Web**
 3. Copy Firebase config (sẽ dùng ở bước tiếp theo)
 4. Bật các services cần thiết:
-   - **Authentication** → Sign-in method → **Email/Password** → Enable
+   - **Authentication** → Sign-in method → bật **Email/Password** VÀ **Google**
+   - **Authentication** → Settings → **Authorized domains** → thêm domain deploy của anh (vd: `your-app.vercel.app`). Thiếu bước này → Google sign-in báo lỗi "unauthorized domain".
    - **Firestore Database** → Create database → Production mode
    - **Cloud Messaging** (FCM) → tự động bật khi tạo project
 
@@ -114,7 +119,21 @@ Firebase Console → App Check → Apps → Manage debug tokens → Add token
   → Copy token → paste vào NEXT_PUBLIC_APPCHECK_DEBUG_TOKEN trong .env.local
 ```
 
-### 6. Deploy Firestore Rules
+### 6. Bật Cloud Text-to-Speech API (cho tính năng đọc phân tích AI)
+
+Phần "đọc to" bản phân tích tài chính dùng Google Cloud TTS (giọng Neural2 tiếng Việt).
+Nếu không bật, app tự fallback về giọng đọc mặc định của trình duyệt (chất lượng thấp hơn).
+
+```
+Google Cloud Console → APIs & Services → Library
+  → tìm "Cloud Text-to-Speech API" → Enable
+  → chọn project trùng với Firebase project
+```
+
+> Dùng chung credentials với `FIREBASE_ADMIN_CREDENTIALS` (service account) — không cần key riêng.
+> Free tier: 1 triệu ký tự/tháng (Neural2). Quá ngưỡng tính ~$16/triệu ký tự.
+
+### 7. Deploy Firestore Rules
 
 ```bash
 npm install -g firebase-tools
@@ -122,7 +141,11 @@ firebase login
 firebase deploy --only firestore:rules
 ```
 
-### 7. Chạy dev server
+> ⚠️ Firestore Rules deploy **riêng**, KHÔNG đi cùng deploy code lên Vercel.
+> Mỗi khi thêm collection mới vào `lib/firebase/firestore.ts`, nhớ thêm rule tương ứng
+> rồi chạy lại lệnh này — thiếu rule → lỗi "Missing or insufficient permissions".
+
+### 8. Chạy dev server
 
 ```bash
 npm run dev
