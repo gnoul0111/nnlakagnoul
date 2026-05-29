@@ -77,11 +77,17 @@ const serwist = new Serwist({
           new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 7 * 24 * 60 * 60 }),
           {
             handlerDidError: async () => {
-              // /offline.html được precache với revision hash (?_WB_REVISION_=xxx).
-              // ignoreSearch: true → match URL bỏ qua query string → tìm được đúng entry.
-              const cache = await caches.open('serwist-precache-v2')
-              const resp  = await cache.match('/offline.html', { ignoreSearch: true })
-              return resp ?? new Response('Offline', { status: 503 })
+              try {
+                const cache = await caches.open('serwist-precache-v2')
+                const resp  = await cache.match('/offline.html', { ignoreSearch: true })
+                if (resp) return resp
+              } catch { /* storage unavailable (incognito, quota exceeded) */ }
+              // Luôn trả về response hợp lệ — không bao giờ throw
+              // Tránh "no-response: no-response" uncaught promise trong console
+              return new Response(
+                '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Offline</title></head><body><p>Không có kết nối mạng. Vui lòng thử lại.</p></body></html>',
+                { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+              )
             },
           },
         ],
