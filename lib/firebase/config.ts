@@ -29,13 +29,14 @@ if (process.env.NODE_ENV === 'production') {
   setLogLevel('error')
 }
 
-// App Check phải init TRƯỚC khi Firestore snapshot listeners bắt đầu.
-// initializeAppCheck() chỉ đăng ký provider (fast, synchronous) —
-// script reCAPTCHA và token fetch vẫn chạy async ở background.
-// Dùng requestIdleCallback gây race condition: onSnapshot listeners start
-// trước khi App Check có token → Firebase trả về PERMISSION_DENIED.
+// PERF: Defer initAppCheck() ra khỏi critical render path.
+// App shell render ngay; reCAPTCHA khởi tạo ngầm khi browser rảnh.
 if (typeof window !== 'undefined') {
-  initAppCheck()
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => initAppCheck(), { timeout: 3000 })
+  } else {
+    setTimeout(initAppCheck, 0)
+  }
 }
 
 const auth: Auth = getAuth(app)
