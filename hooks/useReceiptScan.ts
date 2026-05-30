@@ -15,8 +15,10 @@ export interface ScanResult {
 type ScanStatus = 'idle' | 'scanning' | 'done' | 'error'
 
 // Luôn convert sang JPEG (xử lý HEIC từ iPhone) + resize nếu cần
-// maxDim=1536 giữ chữ trên hóa đơn đủ rõ để AI OCR
-async function compressImage(file: File, maxDim = 1536, quality = 0.9): Promise<Blob> {
+// maxDim=1280 + quality 0.82: ảnh nhẹ hơn ~40% so với 1536@0.9
+// → upload nhanh hơn + Gemini vision xử lý ít token hơn = scan nhanh hơn,
+//   vẫn đủ nét để OCR chữ trên hóa đơn.
+async function compressImage(file: File, maxDim = 1280, quality = 0.82): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
