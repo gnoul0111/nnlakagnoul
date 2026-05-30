@@ -20,6 +20,12 @@ const config = {
     '**/__tests__/**/*.test.ts',
     '**/__tests__/**/*.test.tsx',
   ],
+  // firestore.rules.test.ts cần Firebase Emulator (Java) → chạy riêng qua `npm run test:rules`,
+  // không nằm trong `npm test` mặc định để CI/local không fail khi thiếu emulator.
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/__tests__/firestore.rules.test.ts$',
+  ],
 }
 
 export default createJestConfig(config)
