@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import { authHeader } from '@/lib/auth/getIdToken'
 import { useAppData, useMonthData } from './useAppData'
 import { useBudget } from './useBudget'
@@ -271,6 +271,34 @@ export function useAiSummary(monthKey: string) {
       setTtsStatus('speaking')
     }
   }, [])
+
+  // FIX chồng tiếng: dừng audio khi component unmount (vd: chuyển trang).
+  // React KHÔNG tự tắt new Audio() → nếu không cleanup, audio "mồ côi" tiếp tục
+  // phát và chồng lên lần đọc sau khi quay lại trang.
+  useEffect(() => {
+    return () => {
+      ttsReqIdRef.current++  // vô hiệu mọi fetch TTS đang bay
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ''
+        audioRef.current = null
+      }
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current)
+        heartbeatRef.current = null
+      }
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }, [])
+
+  // Khôi phục tóm tắt từ cache khi mount lại / đổi tháng → không bị "mất" sau khi quay lại.
+  useEffect(() => {
+    const cached = summaryCache.get(monthKey)
+    setSummary(cached ?? null)
+    setSummaryStatus(cached ? 'done' : 'idle')
+  }, [monthKey])
 
   const hasTts = true // Google Cloud TTS luôn available khi đã login
 
