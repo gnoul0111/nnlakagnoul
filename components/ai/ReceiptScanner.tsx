@@ -11,7 +11,8 @@ interface ReceiptScannerProps {
 }
 
 export function ReceiptScanner({ onResult, disabled, className }: ReceiptScannerProps) {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const cameraRef  = useRef<HTMLInputElement>(null)  // chụp ảnh mới (camera)
+  const galleryRef = useRef<HTMLInputElement>(null)  // chọn ảnh có sẵn (thư viện)
   const { status, errorMsg, scan, reset } = useReceiptScan()
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -28,9 +29,9 @@ export function ReceiptScanner({ onResult, disabled, className }: ReceiptScanner
 
   return (
     <div className={cn('w-full', className)}>
-      {/* Hidden file input — capture="environment" mở camera thẳng trên mobile */}
+      {/* Input chụp ảnh — capture="environment" mở camera thẳng trên mobile */}
       <input
-        ref={inputRef}
+        ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
@@ -38,32 +39,47 @@ export function ReceiptScanner({ onResult, disabled, className }: ReceiptScanner
         onChange={handleFileChange}
         disabled={isScanning || disabled}
       />
+      {/* Input chọn từ thư viện — KHÔNG có capture → mở picker ảnh có sẵn */}
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+        disabled={isScanning || disabled}
+      />
 
       {status === 'idle' || status === 'done' ? (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={isScanning || disabled}
-          className={cn(
-            'w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-dashed text-sm font-medium transition-colors',
-            status === 'done'
-              ? 'border-green-500/50 bg-green-500/5 text-green-600 dark:text-green-400'
-              : 'border-border hover:border-primary/50 hover:bg-primary/5 text-muted-foreground hover:text-primary',
-            (isScanning || disabled) && 'opacity-50 cursor-not-allowed',
-          )}
-        >
-          {status === 'done' ? (
-            <>
-              <CheckIcon />
-              <span>Đã điền từ hóa đơn — chụp lại?</span>
-            </>
-          ) : (
-            <>
-              <CameraIcon />
-              <span>Chụp hóa đơn để AI điền tự động</span>
-            </>
-          )}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => cameraRef.current?.click()}
+            disabled={isScanning || disabled}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-dashed text-sm font-medium transition-colors',
+              status === 'done'
+                ? 'border-green-500/50 bg-green-500/5 text-green-600 dark:text-green-400'
+                : 'border-border hover:border-primary/50 hover:bg-primary/5 text-muted-foreground hover:text-primary',
+              (isScanning || disabled) && 'opacity-50 cursor-not-allowed',
+            )}
+          >
+            {status === 'done' ? <CheckIcon /> : <CameraIcon />}
+            <span>{status === 'done' ? 'Chụp lại' : 'Chụp hóa đơn'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => galleryRef.current?.click()}
+            disabled={isScanning || disabled}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-dashed text-sm font-medium transition-colors',
+              'border-border hover:border-primary/50 hover:bg-primary/5 text-muted-foreground hover:text-primary',
+              (isScanning || disabled) && 'opacity-50 cursor-not-allowed',
+            )}
+          >
+            <ImageIcon />
+            <span>Chọn ảnh</span>
+          </button>
+        </div>
       ) : status === 'scanning' ? (
         <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 text-sm text-primary">
           <SpinnerIcon />
@@ -75,7 +91,7 @@ export function ReceiptScanner({ onResult, disabled, className }: ReceiptScanner
           <span className="text-destructive text-xs truncate">{errorMsg}</span>
           <button
             type="button"
-            onClick={() => { reset(); inputRef.current?.click() }}
+            onClick={() => { reset(); cameraRef.current?.click() }}
             className="shrink-0 text-xs font-medium text-primary underline-offset-2 hover:underline"
           >
             Thử lại
@@ -91,6 +107,14 @@ function CameraIcon() {
     <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+    </svg>
+  )
+}
+
+function ImageIcon() {
+  return (
+    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
     </svg>
   )
 }

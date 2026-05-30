@@ -37,7 +37,9 @@ export async function POST(request: NextRequest) {
   let text: string
   try {
     const body = await request.json()
-    text = String(body.text ?? '').trim().slice(0, 5000)
+    // Google TTS giới hạn 5000 BYTE/request. Tiếng Việt có dấu ~2-3 byte/ký tự
+    // → cắt ở 2000 ký tự cho an toàn (summary thực tế ~1500 ký tự).
+    text = String(body.text ?? '').trim().slice(0, 2000)
   } catch {
     return NextResponse.json({ error: 'Request không hợp lệ.' }, { status: 400 })
   }

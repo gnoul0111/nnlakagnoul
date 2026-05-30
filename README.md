@@ -215,13 +215,20 @@ Mở [http://localhost:3000](http://localhost:3000).
 
 > ⚠️ `FIREBASE_ADMIN_CREDENTIALS` và `GEMINI_API_KEY` là secret — Vercel sẽ tự encrypt và ẩn sau khi save.
 
-### Deploy thường ngày
+### Deploy thường ngày (quy trình PR)
+
+Code đi qua CI (test + build) trước khi vào `main` — nhánh `main` đã bật branch protection.
 
 ```powershell
-.\deploy.ps1
+git checkout -b fix/ten-thay-doi   # 1. tạo nhánh
+# ... sửa code ...
+.\deploy.ps1                        # 2. commit + push + mở link tạo PR
+# → tạo PR, đợi CI xanh, bấm Merge → Vercel tự deploy
+git checkout main; git pull
+.\deploy.ps1                        # 3. gửi push notification cho users
 ```
 
-Script tự động: commit → push GitHub → Vercel build → gửi push notification cho users.
+📖 Xem chi tiết từng bước trong [WORKFLOW.md](WORKFLOW.md).
 
 ---
 

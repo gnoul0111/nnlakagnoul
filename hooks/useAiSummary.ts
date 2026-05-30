@@ -6,12 +6,12 @@ import { useAppData, useMonthData } from './useAppData'
 import { useBudget } from './useBudget'
 import { calcCashflow, calcCategorySpending } from '@/lib/utils/budgetCalc'
 import { computeTotalDeposited } from '@/lib/types/savings'
-import { isDebtOverdue, isDebtUpcoming } from '@/lib/types/debt'
+import { isDebtOverdue, isDebtUpcoming, computeRemaining } from '@/lib/types/debt'
 import { today, thisMonth } from '@/lib/utils/date'
 import type { FinanceSummaryInput } from '@/app/api/ai/finance-summary/route'
 
 export type SummaryStatus = 'idle' | 'loading' | 'done' | 'error'
-export type TtsStatus     = 'idle' | 'speaking' | 'paused'
+export type TtsStatus     = 'idle' | 'loading' | 'speaking' | 'paused'
 
 // In-session cache per monthKey — clears on page refresh, avoids repeated API calls
 const summaryCache = new Map<string, string>()
@@ -25,6 +25,8 @@ export function useAiSummary(monthKey: string) {
   const utteranceRef  = useRef<SpeechSynthesisUtterance | null>(null)
   const heartbeatRef  = useRef<ReturnType<typeof setInterval> | null>(null)
   const audioRef      = useRef<HTMLAudioElement | null>(null)
+  // Mỗi lần speak/stop tăng id này. Fetch TTS xong mà id đã đổi → bỏ qua (chống audio cũ phát chồng).
+  const ttsReqIdRef   = useRef(0)
 
   // ─── Data ────────────────────────────────────────────────────────────────────
   const { expenses, allIncomes: incomes, debts, goals } = useAppData()
@@ -72,15 +74,18 @@ export function useAiSummary(monthKey: string) {
 
     // ── Nợ ─────────────────────────────────────────────────────────────────────
     const todayStr = today()
+    // FIX: dùng computeRemaining() (tính lại từ payments — source of truth) thay cho
+    // d.paidAmount (field "KHÔNG tin tưởng", có thể stale = 0 → ra nợ gốc thay vì còn lại).
+    // Chỉ tính nợ type 'borrow' (tôi đang nợ) — khớp với cách tab Nợ hiển thị "Tôi đang nợ".
     const totalDebtRemaining = debts
-      .filter(d => !d.deleted)
-      .reduce((sum, d) => sum + Math.max(0, d.amount - (d.paidAmount ?? 0)), 0)
+      .filter(d => !d.deleted && d.type === 'borrow')
+      .reduce((sum, d) => sum + computeRemaining(d), 0)
 
     const alertDebts = debts
       .filter(d => !d.deleted && (isDebtOverdue(d, todayStr) || isDebtUpcoming(d, todayStr)))
       .map(d => ({
         name:      d.name,
-        remaining: d.amount - (d.paidAmount ?? 0),
+        remaining: computeRemaining(d),
         dueDate:   d.dueDate ?? null,
         type:      d.type as string,
       }))
@@ -125,6 +130,8 @@ export function useAiSummary(monthKey: string) {
 
   const stopSpeech = useCallback(() => {
     stopHeartbeat()
+    // Vô hiệu hóa mọi fetch TTS đang bay → audio cũ về sẽ không phát
+    ttsReqIdRef.current++
     // Dừng Audio element (Google Cloud TTS)
     if (audioRef.current) {
       audioRef.current.pause()
@@ -184,8 +191,10 @@ export function useAiSummary(monthKey: string) {
 
   const speak = useCallback(async (text: string) => {
     if (typeof window === 'undefined') return
-    stopSpeech()
-    setTtsStatus('speaking')
+
+    stopSpeech()             // dừng audio cũ + tăng reqId (mọi fetch cũ sẽ bị bỏ)
+    const myId = ttsReqIdRef.current
+    setTtsStatus('loading')  // stopSpeech vừa set 'idle' → đặt lại 'loading'
 
     try {
       // Gọi API server để lấy audio từ Google Cloud TTS Neural2
@@ -196,18 +205,25 @@ export function useAiSummary(monthKey: string) {
         body:    JSON.stringify({ text }),
       })
 
+      // Trong lúc fetch, user đã bấm Dừng / Đọc lại → bỏ kết quả này
+      if (ttsReqIdRef.current !== myId) return
+
       if (!res.ok) throw new Error(`TTS API ${res.status}`)
 
       const { audio, mimeType } = await res.json()
-      const audioSrc = `data:${mimeType};base64,${audio}`
+      if (ttsReqIdRef.current !== myId) return
 
+      const audioSrc = `data:${mimeType};base64,${audio}`
       const el = new Audio(audioSrc)
       audioRef.current = el
       el.onended  = () => setTtsStatus('idle')
       el.onerror  = () => setTtsStatus('idle')
       await el.play()
+      setTtsStatus('speaking')
 
     } catch {
+      // User đã dừng trong lúc fetch → không fallback
+      if (ttsReqIdRef.current !== myId) return
       // Fallback: browser SpeechSynthesis khi API không khả dụng
       if (!window.speechSynthesis) { setTtsStatus('idle'); return }
 
@@ -219,10 +235,12 @@ export function useAiSummary(monthKey: string) {
       const viVoice = voices.find(v => v.lang === 'vi-VN') ?? voices.find(v => v.lang.startsWith('vi'))
       if (viVoice) utterance.voice = viVoice
 
+      utterance.onstart = () => setTtsStatus('speaking')
       utterance.onend   = () => { stopHeartbeat(); setTtsStatus('idle') }
       utterance.onerror = () => { stopHeartbeat(); setTtsStatus('idle') }
       utteranceRef.current = utterance
       window.speechSynthesis.speak(utterance)
+      setTtsStatus('speaking')
 
       // Heartbeat giữ browser TTS không bị ngắt giữa chừng trên một số browser
       heartbeatRef.current = setInterval(() => {

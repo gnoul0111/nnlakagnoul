@@ -66,16 +66,23 @@ export function AiSummaryWidget({ monthKey, className }: AiSummaryWidgetProps) {
         <p className="text-sm text-foreground leading-relaxed">{summary}</p>
       )}
 
-      {/* TTS player — chỉ hiện khi có summary và browser hỗ trợ */}
+      {/* TTS player — chỉ hiện khi có summary */}
       {hasSummary && hasTts && summary && (
         <div className="flex items-center gap-2 pt-1 border-t border-border">
           <span className="text-xs text-muted-foreground mr-auto">
-            {ttsStatus === 'speaking' ? 'Đang đọc...' : ttsStatus === 'paused' ? 'Đã dừng' : 'Nghe AI đọc'}
+            {ttsStatus === 'loading'  ? 'Đang tải giọng đọc...'
+              : ttsStatus === 'speaking' ? 'Đang đọc...'
+              : ttsStatus === 'paused'   ? 'Đã dừng'
+              : 'Nghe AI đọc'}
           </span>
 
-          {/* Play / Pause */}
-          {ttsStatus === 'speaking' ? (
-            <TtsButton onClick={pauseSpeech} label="Dừng" title="Tạm dừng">
+          {ttsStatus === 'loading' ? (
+            // Đang tải audio — hiện spinner, khóa nút để chống bấm lại (chống đọc chồng)
+            <span className="flex items-center justify-center w-8 h-8 text-muted-foreground">
+              <SpinnerIcon />
+            </span>
+          ) : ttsStatus === 'speaking' ? (
+            <TtsButton onClick={pauseSpeech} label="Tạm dừng" title="Tạm dừng">
               <PauseIcon />
             </TtsButton>
           ) : ttsStatus === 'paused' ? (
@@ -88,27 +95,13 @@ export function AiSummaryWidget({ monthKey, className }: AiSummaryWidgetProps) {
             </TtsButton>
           )}
 
-          {/* Stop — chỉ hiện khi đang nói hoặc paused */}
-          {ttsStatus !== 'idle' && (
+          {/* Stop — chỉ khi đang đọc hoặc tạm dừng */}
+          {(ttsStatus === 'speaking' || ttsStatus === 'paused') && (
             <TtsButton onClick={stopSpeech} label="Dừng hẳn" title="Dừng hẳn">
               <StopIcon />
             </TtsButton>
           )}
-
-          {/* Đọc lại từ đầu */}
-          {ttsStatus === 'idle' && summaryStatus === 'done' && (
-            <TtsButton onClick={() => speak(summary)} label="Nghe lại" title="Nghe lại">
-              <ReplayIcon />
-            </TtsButton>
-          )}
         </div>
-      )}
-
-      {/* Fallback nếu browser không hỗ trợ TTS */}
-      {hasSummary && !hasTts && (
-        <p className="text-xs text-muted-foreground border-t border-border pt-2">
-          Browser không hỗ trợ đọc to. Hãy dùng Chrome hoặc Edge để nghe AI đọc.
-        </p>
       )}
     </div>
   )
@@ -164,14 +157,6 @@ function StopIcon() {
   return (
     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
       <path d="M6 6h12v12H6z" />
-    </svg>
-  )
-}
-
-function ReplayIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
     </svg>
   )
 }
