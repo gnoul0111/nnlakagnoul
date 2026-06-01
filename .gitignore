@@ -42,3 +42,9 @@ next-env.d.ts
 
 .vercel
 nnlakagnoul-firebase-adminsdk-fbsvc-6183ab459e.json
+
+# Ghi chú thiết kế riêng tư — không lên GitHub
+*.local.md
+
+# Output build tạm của `tsc -b tsconfig.test.json` (typecheck)
+.jest-out

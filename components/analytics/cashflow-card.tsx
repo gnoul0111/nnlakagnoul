@@ -36,7 +36,7 @@ export function CashflowCard({
         {rows.map(row => (
           <div key={row.label} className="flex items-center justify-between">
             <span className="text-sm text-foreground">{row.label}</span>
-            <span className={cn('text-sm font-semibold', row.color, moneyHidden && 'blur-sm')}>
+            <span className={cn('text-sm font-semibold', row.color)}>
               {row.sign}{formatMoney(row.value, moneyHidden)}
             </span>
           </div>
@@ -48,7 +48,6 @@ export function CashflowCard({
           <span className={cn(
             'text-base font-bold',
             netBalance >= 0 ? 'text-success' : 'text-destructive',
-            moneyHidden && 'blur-sm',
           )}>
             {netBalance >= 0 ? '+' : ''}{formatMoney(netBalance, moneyHidden)}
           </span>

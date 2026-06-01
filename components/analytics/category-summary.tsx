@@ -74,7 +74,7 @@ export function CategorySummary({ moneyHidden }: CategorySummaryProps) {
                   <span className="text-sm font-medium text-foreground truncate">{cat.label}</span>
                 </div>
                 <span className="w-10 sm:w-16 text-right text-sm text-muted-foreground shrink-0">{cat.count}</span>
-                <span className={cn('w-24 sm:w-28 text-right text-sm font-semibold text-foreground shrink-0 truncate', moneyHidden && 'blur-sm')}>
+                <span className={cn('w-24 sm:w-28 text-right text-sm font-semibold text-foreground shrink-0 truncate')}>
                   {formatMoney(cat.amount, moneyHidden)}
                 </span>
                 <span className="w-10 text-right text-xs text-muted-foreground shrink-0">
@@ -88,7 +88,7 @@ export function CategorySummary({ moneyHidden }: CategorySummaryProps) {
               <span className="w-10 sm:w-16 text-right text-sm text-muted-foreground shrink-0">
                 {rangeExpenses.length}
               </span>
-              <span className={cn('w-24 sm:w-28 text-right text-sm font-bold text-foreground shrink-0 truncate', moneyHidden && 'blur-sm')}>
+              <span className={cn('w-24 sm:w-28 text-right text-sm font-bold text-foreground shrink-0 truncate')}>
                 {formatMoney(total, moneyHidden)}
               </span>
               <span className="w-10 text-right text-xs text-muted-foreground shrink-0">100%</span>

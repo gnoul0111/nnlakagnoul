@@ -246,9 +246,9 @@ export function GoalsTab() {
                 <div className="px-4 pb-3 space-y-2">
                   <Progress value={pct} level="ok" />
                   <div className="flex justify-between text-sm">
-                    <span className={cn('font-semibold text-foreground', moneyHidden && 'blur-sm')}>{formatMoney(balance, moneyHidden)}</span>
+                    <span className={cn('font-semibold text-foreground')}>{formatMoney(balance, moneyHidden)}</span>
                     <span className="text-muted-foreground">
-                      {formatPercent(pct)} / <span className={moneyHidden ? 'blur-sm' : ''}>{formatMoney(goal.targetAmount, moneyHidden)}</span>
+                      {formatPercent(pct)} / <span>{formatMoney(goal.targetAmount, moneyHidden)}</span>
                     </span>
                   </div>
                 </div>
@@ -259,7 +259,7 @@ export function GoalsTab() {
                       <div key={dep.id} className={cn('flex items-center justify-between px-4 py-2 text-xs', i > 0 && 'border-t border-border/30')}>
                         <span className="text-muted-foreground">{formatDateVN(dep.date)}{dep.note ? ` · ${dep.note}` : ''}</span>
                         <div className="flex items-center gap-1">
-                          <span className={cn('font-medium text-foreground', moneyHidden && 'blur-sm')}>{formatMoney(dep.amount, moneyHidden)}</span>
+                          <span className={cn('font-medium text-foreground')}>{formatMoney(dep.amount, moneyHidden)}</span>
                           <button onClick={() => setDeleteDepositTarget({ goal, deposit: dep })}
                             className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
                             <Trash2 className="w-3 h-3" />

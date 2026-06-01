@@ -1,16 +1,15 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useAuthStore } from '@/lib/store/authStore'
-import { useSettingsStore, selectMoneyHidden, selectDashboardMetrics } from '@/lib/store/settingsStore'
-import type { MetricValues } from '@/lib/dashboard/metricCatalog'
+import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
+import { SECONDARY_METRICS } from '@/lib/dashboard/metricCatalog'
 import { useAppData, useMonthData } from '@/hooks/useAppData'
 import { useCurrentMonth } from '@/hooks/useCurrentMonth'
 import { useBudget } from '@/hooks/useBudget'
 
 import { MonthPicker } from '@/components/dashboard/month-picker'
 import { StatsGrid } from '@/components/dashboard/stats-grid'
-import { DashboardCustomizeSheet } from '@/components/dashboard/dashboard-customize-sheet'
 import { BudgetProgress } from '@/components/dashboard/budget-progress'
 import { SavingsSummary } from '@/components/dashboard/savings-summary'
 import { DebtAlerts } from '@/components/dashboard/debt-alerts'
@@ -21,23 +20,26 @@ import { AiSummaryWidget } from '@/components/ai/AiSummaryWidget'
 
 import { calcCashflow } from '@/lib/utils/budgetCalc'
 import { computeTotalDeposited } from '@/lib/types/savings'
-import { isDebtOverdue, isDebtUpcoming } from '@/lib/types/debt'
-import { today } from '@/lib/utils/date'
+import { isDebtOverdue, isDebtUpcoming, computePaidAmount, computeRemaining } from '@/lib/types/debt'
+import { today, prevMonth } from '@/lib/utils/date'
+
+/** % thay đổi so với kỳ trước. null nếu kỳ trước = 0 (không so được). */
+function pctChange(cur: number, prev: number): number | null {
+  if (prev === 0) return null
+  return Math.round(((cur - prev) / Math.abs(prev)) * 100)
+}
 
 export default function DashboardPage() {
   const user            = useAuthStore(s => s.user)
   const toggleHidden    = useSettingsStore(s => s.toggleMoneyHidden)
   const moneyHidden     = useSettingsStore(selectMoneyHidden)
-  const dashboardMetrics = useSettingsStore(selectDashboardMetrics)
-  const updateSettings   = useSettingsStore(s => s.updateSettings)
-  const [customizeOpen, setCustomizeOpen] = useState(false)
 
   const {
     currentMonth, goToPrevMonth, goToNextMonth, goToToday, isCurrentMonth,
   } = useCurrentMonth()
 
   // ─── Data ─────────────────────────────────────────────────────────────────
-  const { expenses, goals, debts, isLoading }      = useAppData()
+  const { expenses, goals, debts, allIncomes, savingsPlans, isLoading } = useAppData()
   const { monthExpenses, spendingExpenses, monthIncomes, savingsPlan } = useMonthData(currentMonth)
   const { budget }                                  = useBudget(currentMonth)
 
@@ -49,18 +51,47 @@ export default function DashboardPage() {
     [expenses, monthIncomes, debts, goals, savingsPlan, currentMonth],
   )
 
+  // Cashflow tháng trước → tính % so với tháng trước cho hero
+  const prevKey = prevMonth(currentMonth)
+  const prevCashflow = useMemo(
+    () => calcCashflow(expenses, allIncomes, debts, goals, savingsPlans[prevKey] ?? null, prevKey),
+    [expenses, allIncomes, debts, goals, savingsPlans, prevKey],
+  )
+
   const savingsDeposited = savingsPlan ? computeTotalDeposited(savingsPlan) : 0
 
-  // Mọi chỉ số đều được tính đủ (rẻ) — StatsGrid chỉ chọn hiển thị thẻ nào theo settings.
-  const metrics: MetricValues = {
-    income:      cashflow.totalIncome,
-    consumption: cashflow.consumptionTotal,
-    balance:     cashflow.netBalance,
-    savings:     savingsDeposited,
-    debt:        cashflow.debtPaidTotal,
-    goal:        cashflow.goalSavedTotal,
-    transfer:    cashflow.transferOut,
+  // ── Hero (Thu / Chi / Số dư) + trend % ──────────────────────────────────────
+  const hero = {
+    income:           cashflow.totalIncome,
+    consumption:      cashflow.consumptionTotal,
+    balance:          cashflow.netBalance,
+    incomeTrend:      pctChange(cashflow.totalIncome,     prevCashflow.totalIncome),
+    consumptionTrend: pctChange(cashflow.consumptionTotal, prevCashflow.consumptionTotal),
+    balanceTrend:     pctChange(cashflow.netBalance,      prevCashflow.netBalance),
+    spendRatio:       cashflow.totalIncome > 0
+      ? (cashflow.consumptionTotal / cashflow.totalIncome) * 100
+      : (cashflow.consumptionTotal > 0 ? 100 : 0),
   }
+
+  // ── Thẻ phụ: giá trị + mục tiêu + tiến độ ───────────────────────────────────
+  const borrowDebts     = debts.filter(d => !d.deleted && d.type === 'borrow')
+  const totalDebtAmount = borrowDebts.reduce((s, d) => s + d.amount, 0)
+  const totalDebtPaid   = borrowDebts.reduce((s, d) => s + computePaidAmount(d), 0)
+  const totalDebtRemaining = borrowDebts.reduce((s, d) => s + computeRemaining(d), 0)
+  const activeGoals     = goals.filter(g => !g.deleted)
+  const totalGoalTarget = activeGoals.reduce((s, g) => s + (g.targetAmount  ?? 0), 0)
+  const totalGoalCurrent= activeGoals.reduce((s, g) => s + (g.currentAmount ?? 0), 0)
+  const savingsTarget   = savingsPlan?.targetAmount ?? 0
+
+  const cardValues: Record<string, { value: number; target: number; progressPct: number }> = {
+    savings: { value: savingsDeposited,         target: savingsTarget,   progressPct: savingsTarget   > 0 ? (savingsDeposited / savingsTarget)   * 100 : 0 },
+    debt:    { value: cashflow.debtPaidTotal,   target: totalDebtRemaining, progressPct: totalDebtAmount > 0 ? (totalDebtPaid / totalDebtAmount) * 100 : 0 },
+    goal:    { value: cashflow.goalSavedTotal,  target: totalGoalTarget, progressPct: totalGoalTarget > 0 ? (totalGoalCurrent / totalGoalTarget) * 100 : 0 },
+  }
+
+  // Hiển thị tất cả thẻ phụ (đã bỏ tính năng tùy chỉnh bật/tắt)
+  const cards = SECONDARY_METRICS.map(m => ({ ...m, ...cardValues[m.id] }))
+
   const budgetAmount     = budget ? (budget.spendingAmount ?? budget.amount ?? 0) : 0
   const spendingTotal    = spendingExpenses.reduce((s, e) => s + e.amount, 0)
   const todayStr         = today()
@@ -72,7 +103,7 @@ export default function DashboardPage() {
   if (isLoading) return <DashboardSkeleton />
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-4 animate-fade-in w-full max-w-6xl mx-auto">
       {/* Month picker */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-foreground">Tổng quan</h2>
@@ -85,20 +116,12 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Stats 2x2 */}
+      {/* Tổng quan: hero + thẻ phụ */}
       <StatsGrid
-        metrics={metrics}
-        metricIds={dashboardMetrics}
+        hero={hero}
+        cards={cards}
         moneyHidden={moneyHidden}
         onToggleHidden={() => user && toggleHidden(user.uid)}
-        onCustomize={() => setCustomizeOpen(true)}
-      />
-
-      <DashboardCustomizeSheet
-        open={customizeOpen}
-        onClose={() => setCustomizeOpen(false)}
-        enabledIds={dashboardMetrics}
-        onChange={ids => user && updateSettings(user.uid, { dashboardMetrics: ids })}
       />
 
       {/* Budget progress */}

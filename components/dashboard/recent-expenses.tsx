@@ -75,7 +75,7 @@ export function RecentExpenses({ expenses, moneyHidden }: RecentExpensesProps) {
                   </div>
 
                   {/* Amount */}
-                  <p className={cn('text-sm font-semibold text-destructive shrink-0', moneyHidden && 'blur-sm')}>
+                  <p className="text-sm font-semibold text-destructive shrink-0">
                     {formatMoney(expense.amount, moneyHidden)}
                   </p>
                 </li>

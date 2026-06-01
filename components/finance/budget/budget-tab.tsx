@@ -133,7 +133,7 @@ export function BudgetTab() {
               ].map(item => (
                 <div key={item.label} className="bg-muted/50 rounded-lg p-2">
                   <p className="text-xs text-muted-foreground">{item.label}</p>
-                  <p className={cn('text-sm font-bold mt-0.5', item.cls, moneyHidden && 'blur-sm')}>{formatMoney(item.value, moneyHidden)}</p>
+                  <p className={cn('text-sm font-bold mt-0.5', item.cls)}>{formatMoney(item.value, moneyHidden)}</p>
                 </div>
               ))}
             </div>
@@ -145,7 +145,7 @@ export function BudgetTab() {
         {budget?.savingsTarget ? (
           <div className="flex justify-between items-center pt-2 border-t border-border">
             <span className="text-sm text-muted-foreground">Mục tiêu tiết kiệm</span>
-            <span className={cn('text-sm font-semibold text-purple-500', moneyHidden && 'blur-sm')}>{formatMoney(budget.savingsTarget, moneyHidden)}</span>
+            <span className={cn('text-sm font-semibold text-purple-500')}>{formatMoney(budget.savingsTarget, moneyHidden)}</span>
           </div>
         ) : null}
       </div>
@@ -205,7 +205,7 @@ export function BudgetTab() {
                 <>
                   <Progress value={catPct} level={catLevel} className="h-1.5" />
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span className={moneyHidden ? 'blur-sm' : ''}>{formatMoney(catSpending, moneyHidden)}</span>
+                    <span>{formatMoney(catSpending, moneyHidden)}</span>
                     <span className={cn(catLevel !== 'ok' && alertColors[catLevel])}>{catPct}%</span>
                   </div>
                 </>

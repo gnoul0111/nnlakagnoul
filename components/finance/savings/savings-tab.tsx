@@ -232,7 +232,7 @@ export function SavingsTab() {
           ].map(item => (
             <div key={item.label} className="bg-muted/50 rounded-lg p-2">
               <p className="text-xs text-muted-foreground">{item.label}</p>
-              <p className={cn('text-sm font-bold mt-0.5', item.cls, moneyHidden && 'blur-sm')}>{formatMoney(item.value, moneyHidden)}</p>
+              <p className={cn('text-sm font-bold mt-0.5', item.cls)}>{formatMoney(item.value, moneyHidden)}</p>
             </div>
           ))}
         </div>
@@ -252,7 +252,7 @@ export function SavingsTab() {
                 <p className="text-xs text-muted-foreground">{formatDateVN(dep.date)}</p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <span className={cn('text-sm font-semibold text-success', moneyHidden && 'blur-sm')}>+{formatMoney(dep.amount, moneyHidden)}</span>
+                <span className={cn('text-sm font-semibold text-success')}>+{formatMoney(dep.amount, moneyHidden)}</span>
                 <button onClick={() => setDeleteDepositTarget(dep)}
                   className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
                   <Trash2 className="w-3.5 h-3.5" />
@@ -279,7 +279,7 @@ export function SavingsTab() {
                 <p className="text-xs text-muted-foreground">{formatDateVN(wd.date)}</p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <span className={cn('text-sm font-semibold text-destructive', moneyHidden && 'blur-sm')}>-{formatMoney(wd.amount, moneyHidden)}</span>
+                <span className={cn('text-sm font-semibold text-destructive')}>-{formatMoney(wd.amount, moneyHidden)}</span>
                 <button onClick={() => setDeleteWithdrawTarget(wd)}
                   className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
                   <Trash2 className="w-3.5 h-3.5" />

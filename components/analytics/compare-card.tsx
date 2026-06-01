@@ -55,13 +55,13 @@ export function CompareCard({
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-muted/50 rounded-lg p-3">
             <p className="text-xs text-muted-foreground">Kỳ này</p>
-            <p className={cn('text-base font-bold text-foreground mt-0.5', moneyHidden && 'blur-sm')}>
+            <p className={cn('text-base font-bold text-foreground mt-0.5')}>
               {formatMoney(current, moneyHidden)}
             </p>
           </div>
           <div className="bg-muted/50 rounded-lg p-3">
             <p className="text-xs text-muted-foreground">Kỳ trước</p>
-            <p className={cn('text-base font-bold text-muted-foreground mt-0.5', moneyHidden && 'blur-sm')}>
+            <p className={cn('text-base font-bold text-muted-foreground mt-0.5')}>
               {formatMoney(previous, moneyHidden)}
             </p>
           </div>
@@ -91,7 +91,7 @@ export function CompareCard({
                     )}
                     {isNoChange ? '–' : `${isUp ? '+' : ''}${item.pctDiff}%`}
                   </div>
-                  <p className={cn('text-xs text-muted-foreground shrink-0 text-right', moneyHidden && 'blur-sm')}>
+                  <p className={cn('text-xs text-muted-foreground shrink-0 text-right')}>
                     {moneyHidden ? '••••' : formatCompact(item.current) + 'đ'}
                   </p>
                 </div>

@@ -109,7 +109,7 @@ export function ExpensesTab() {
         <span className="text-sm text-muted-foreground">
           {hasFilter ? 'Tổng trong khoảng ngày' : 'Tổng chi tiêu thực'}
         </span>
-        <span className={cn('text-base font-bold text-destructive', moneyHidden && 'blur-sm')}>
+        <span className={cn('text-base font-bold text-destructive')}>
           {formatMoney(totalSpending, moneyHidden)}
         </span>
       </div>
@@ -125,7 +125,7 @@ export function ExpensesTab() {
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   {formatDateShort(date)}
                 </span>
-                <span className={cn('text-xs font-semibold text-destructive', moneyHidden && 'blur-sm')}>
+                <span className={cn('text-xs font-semibold text-destructive')}>
                   {formatMoney(expenses.filter(isConsumptionExpense).reduce((s, e) => s + e.amount, 0), moneyHidden)}
                 </span>
               </div>
@@ -155,7 +155,7 @@ export function ExpensesTab() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {/* Bỏ dấu "-" — màu đỏ đủ phân biệt chi tiêu */}
-                      <span className={cn('text-sm font-semibold text-destructive mr-1', moneyHidden && 'blur-sm')}>
+                      <span className={cn('text-sm font-semibold text-destructive mr-1')}>
                         {formatMoney(expense.amount, moneyHidden)}
                       </span>
                       {!isSavings ? (
