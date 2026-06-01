@@ -463,29 +463,22 @@ describe('calcCashflow', () => {
     expect(result.netBalance).toBe(1_500_000)
   })
 
-  test('chi tài trợ bằng nợ tính 1 lần; trả nợ gốc là info, không cộng lại cash-out', () => {
+  test('trả nợ gốc (borrow) trừ vào số dư; TỔNG CHI vẫn chỉ là tiêu dùng', () => {
     const debt: Debt = {
       id: 'debt_1', userId: 'u1', name: 'Bạn A',
       amount: 2_000_000, type: 'borrow',
       paidAmount: 500_000,
-      payments: [
-        { id: 'pay_1', amount: 500_000, date: '2026-03-05' },
-      ],
-      deleted: false,
-      dueDate: null,
-      note: '',
-      createdAt: 0,
+      payments: [{ id: 'pay_1', amount: 500_000, date: '2026-03-05' }],
+      deleted: false, dueDate: null, note: '', createdAt: 0,
     }
-    const expenses = [
-      exp(1_000_000, '2026-03-01'),
-      exp(500_000,   '2026-03-05', 'other', { _debtId: 'debt_1' }),  // tài trợ bằng nợ → tiêu dùng
-    ]
-    const incomes = [inc(5_000_000, MK)]
-    const result  = calcCashflow(expenses, incomes, [debt], noGoals, null, MK)
+    // Chi thường (KHÔNG _debtId) — đây là trả nợ cũ trong tháng này
+    const expenses = [exp(1_000_000, '2026-03-01')]
+    const incomes  = [inc(5_000_000, MK)]
+    const result   = calcCashflow(expenses, incomes, [debt], noGoals, null, MK)
 
-    expect(result.consumptionTotal).toBe(1_500_000)  // gồm cả chi _debtId
-    expect(result.debtPaidTotal).toBe(500_000)        // info, từ debt.payments (borrow)
-    expect(result.totalCashOut).toBe(1_500_000)       // KHÔNG cộng trả nợ → không double count
+    expect(result.consumptionTotal).toBe(1_000_000)  // TỔNG CHI = tiêu dùng (không gồm trả nợ)
+    expect(result.debtPaidTotal).toBe(500_000)
+    expect(result.totalCashOut).toBe(1_500_000)       // tiêu dùng + trả nợ gốc
     expect(result.netBalance).toBe(3_500_000)         // 5tr − 1.5tr
   })
 

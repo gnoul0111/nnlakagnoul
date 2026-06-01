@@ -151,16 +151,16 @@ export interface CashflowSummary {
   /** @deprecated alias của consumptionTotal — giữ cho consumer cũ */
   spendingTotal: number
   /**
-   * Trả nợ GỐC trong tháng — CHỈ nợ 'borrow'. Là CHUYỂN DỊCH (settle financing),
-   * KHÔNG cộng vào TỔNG CHI và KHÔNG trừ vào netBalance (vì chi tài trợ bằng nợ
-   * đã nằm trong consumptionTotal rồi). Chỉ mang tính thông tin.
+   * Trả nợ GỐC trong tháng — CHỈ nợ 'borrow' (nợ 'lend' là tiền VÀO → loại).
+   * KHÔNG nằm trong consumptionTotal (TỔNG CHI = tiêu dùng), NHƯNG ĐƯỢC trừ vào
+   * netBalance vì là tiền thật rời khỏi ví trong tháng (thường là trả nợ cũ).
    */
   debtPaidTotal: number
   goalSavedTotal: number   // nạp mục tiêu (từ goal.deposits)
   savingsTotal: number     // nạp tiết kiệm (từ expenses có _savingsMonthKey)
-  /** Chuyển dịch sang quỹ riêng = goalSaved + savings (KHÔNG gồm trả nợ gốc) */
+  /** Chuyển dịch sang quỹ riêng = goalSaved + savings */
   transferOut: number
-  /** Tiền thực sự rời khỏi khả năng chi = consumption + transferOut */
+  /** Tổng tiền thật rời khỏi ví = consumption + trả nợ gốc + transferOut */
   totalCashOut: number
   netBalance: number       // totalIncome - totalCashOut
 }
@@ -206,10 +206,13 @@ export function calcCashflow(
       .reduce((sum, e) => sum + e.amount, 0),
   )
 
-  // Trả nợ gốc KHÔNG vào totalCashOut: chi tài trợ bằng nợ đã nằm trong
-  // consumptionTotal, cộng debtPaid nữa sẽ double count cùng một khoản tiền.
+  // SỐ DƯ = thu − TẤT CẢ tiền rời khỏi ví trong tháng. TỔNG CHI hiển thị chỉ là
+  // consumptionTotal (tiêu dùng); nhưng số dư phải trừ thêm trả nợ gốc + chuyển dịch
+  // vì đó cũng là tiền thật ra khỏi ví (vd trả nợ cũ tháng này).
+  // (Edge: nếu vừa tạo expense _debtId vừa trả nợ CÙNG tháng sẽ hơi lệch — cần ghi
+  //  nhận sự kiện "vay vào ví" mới chuẩn tuyệt đối; để dành cải tiến sau.)
   const transferOut  = goalSavedTotal + savingsTotal
-  const totalCashOut = consumptionTotal + transferOut
+  const totalCashOut = consumptionTotal + debtPaidTotal + transferOut
   const netBalance   = totalIncome - totalCashOut
 
   return {
