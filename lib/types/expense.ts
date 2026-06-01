@@ -60,17 +60,21 @@ export function isLinkedExpense(expense: Expense): boolean {
 }
 
 /**
- * Chi tiêu "thật" (tiêu dùng) — KHÔNG phải khoản linked (trả nợ / nạp goal / tiết kiệm).
+ * Chi tiêu "tiêu dùng" — tính vào TỔNG CHI / ngân sách.
  *
- * SINGLE SOURCE OF TRUTH cho việc "đâu là chi tiêu được tính".
- * Trước đây predicate này bị viết tay lặp lại ~15 nơi (budget, analytics, calendar,
- * dashboard...). Mọi nơi tính tổng chi tiêu thực PHẢI dùng hàm này.
+ * GỒM: chi tiêu thường + chi tài trợ bằng nợ (`_debtId`) — vì đó là tiêu dùng
+ * THẬT, chỉ khác ở chỗ được tài trợ bằng khoản vay. Việc trả nợ gốc sau đó là
+ * CHUYỂN DỊCH tiền (không phải tiêu dùng mới) nên được tính riêng, không cộng
+ * lại vào TỔNG CHI → tránh double count.
  *
- * Lưu ý: KHÔNG kiểm tra `deleted` ở đây — call site tự lọc deleted theo nhu cầu
- * (giống isLinkedExpense). Hầu hết data đã là active (getActiveExpenses).
+ * KHÔNG GỒM: nạp mục tiêu (`_goalId`) và tiết kiệm (`_savingsMonthKey`) — đó là
+ * chuyển tiền sang quỹ của CHÍNH MÌNH, tiền không mất đi, nên không phải tiêu dùng.
+ *
+ * SINGLE SOURCE OF TRUTH cho "đâu là chi tiêu được tính". Mọi nơi tính tổng chi
+ * tiêu PHẢI dùng hàm này. KHÔNG kiểm tra `deleted` (call site tự lọc).
  */
 export function isConsumptionExpense(expense: Expense): boolean {
-  return !isLinkedExpense(expense)
+  return !expense._goalId && !expense._savingsMonthKey
 }
 
 /** Expense từ trả nợ */

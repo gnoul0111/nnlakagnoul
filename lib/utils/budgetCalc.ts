@@ -143,11 +143,25 @@ export function calcCategorySpending(
 
 export interface CashflowSummary {
   totalIncome: number
-  spendingTotal: number    // chi tiêu thường (filtered)
-  debtPaidTotal: number    // từ debt.payments
-  goalSavedTotal: number   // từ goal.deposits
-  savingsTotal: number     // từ expenses có _savingsMonthKey
-  totalCashOut: number     // spendingTotal + debtPaid + goalSaved + savings
+  /**
+   * Chi tiêu tiêu dùng (gồm chi tài trợ bằng nợ `_debtId`; KHÔNG gồm nạp
+   * goal/tiết kiệm). Đây là con số "TỔNG CHI" hiển thị.
+   */
+  consumptionTotal: number
+  /** @deprecated alias của consumptionTotal — giữ cho consumer cũ */
+  spendingTotal: number
+  /**
+   * Trả nợ GỐC trong tháng — CHỈ nợ 'borrow'. Là CHUYỂN DỊCH (settle financing),
+   * KHÔNG cộng vào TỔNG CHI và KHÔNG trừ vào netBalance (vì chi tài trợ bằng nợ
+   * đã nằm trong consumptionTotal rồi). Chỉ mang tính thông tin.
+   */
+  debtPaidTotal: number
+  goalSavedTotal: number   // nạp mục tiêu (từ goal.deposits)
+  savingsTotal: number     // nạp tiết kiệm (từ expenses có _savingsMonthKey)
+  /** Chuyển dịch sang quỹ riêng = goalSaved + savings (KHÔNG gồm trả nợ gốc) */
+  transferOut: number
+  /** Tiền thực sự rời khỏi khả năng chi = consumption + transferOut */
+  totalCashOut: number
   netBalance: number       // totalIncome - totalCashOut
 }
 
@@ -159,13 +173,15 @@ export function calcCashflow(
   savingsPlan: SavingsPlan | null,
   monthKey: string,
 ): CashflowSummary {
-  const totalIncome   = sumIncome(incomes, monthKey)
-  const spendingTotal = sumSpending(expenses, monthKey)
+  const totalIncome      = sumIncome(incomes, monthKey)
+  const consumptionTotal = sumSpending(expenses, monthKey)
 
-  // Tiền trả nợ — từ debt.payments trong tháng (không từ linked expenses → tránh double count)
+  // Trả nợ gốc — từ debt.payments trong tháng.
+  // CHỈ nợ 'borrow' (mình đi vay → tiền ra). Nợ 'lend' (mình cho vay) thì payments
+  // là tiền người ta TRẢ LẠI mình (tiền VÀO), không phải dòng tiền ra → loại.
   const debtPaidTotal = Math.round(
     debts
-      .filter(d => !d.deleted)
+      .filter(d => !d.deleted && d.type === 'borrow')
       .flatMap(d => d.payments)
       .filter(p => p.date.startsWith(monthKey))
       .reduce((sum, p) => sum + p.amount, 0),
@@ -190,15 +206,20 @@ export function calcCashflow(
       .reduce((sum, e) => sum + e.amount, 0),
   )
 
-  const totalCashOut = spendingTotal + debtPaidTotal + goalSavedTotal + savingsTotal
+  // Trả nợ gốc KHÔNG vào totalCashOut: chi tài trợ bằng nợ đã nằm trong
+  // consumptionTotal, cộng debtPaid nữa sẽ double count cùng một khoản tiền.
+  const transferOut  = goalSavedTotal + savingsTotal
+  const totalCashOut = consumptionTotal + transferOut
   const netBalance   = totalIncome - totalCashOut
 
   return {
     totalIncome,
-    spendingTotal,
+    consumptionTotal,
+    spendingTotal: consumptionTotal,
     debtPaidTotal,
     goalSavedTotal,
     savingsTotal,
+    transferOut,
     totalCashOut,
     netBalance,
   }

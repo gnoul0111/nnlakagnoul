@@ -10,6 +10,7 @@ import {
   setMoneyHidden as persistMoneyHidden,
   defaultSettings,
 } from '@/lib/services/settingsService'
+import { DEFAULT_DASHBOARD_METRICS } from '@/lib/dashboard/metricCatalog'
 
 // ─── localStorage cache keys ──────────────────────────────────────────────────
 const SETTINGS_CACHE_KEY  = 'chitieu_settings_cache'
@@ -195,6 +196,8 @@ function applyTheme(theme: 'light' | 'dark'): void {
 const EMPTY_CATEGORIES: CategoryValue[] = []
 
 export const selectMoneyHidden      = (s: SettingsStoreState) => s.settings?.moneyHidden ?? false
+export const selectDashboardMetrics = (s: SettingsStoreState): string[] =>
+  s.settings?.dashboardMetrics ?? DEFAULT_DASHBOARD_METRICS
 export const selectTheme            = (s: SettingsStoreState) => s.settings?.theme ?? 'light'
 export const selectProfilePhoto     = (s: SettingsStoreState) => s.profilePhoto
 export const selectHiddenCategories = (s: SettingsStoreState) =>

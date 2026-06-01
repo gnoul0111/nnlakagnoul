@@ -19,12 +19,13 @@ export function CashflowCard({
   totalIncome, spendingTotal, debtPaidTotal,
   goalSavedTotal, savingsTotal, totalCashOut, netBalance, moneyHidden,
 }: CashflowCardProps) {
+  // Các dòng cộng/trừ ra "Số dư thực". Chi tiêu đã GỒM chi tài trợ bằng nợ.
+  // Trả nợ gốc KHÔNG nằm ở đây (là chuyển dịch, không trừ vào số dư) → xem dòng info.
   const rows = [
-    { label: '💰 Thu nhập',       value: totalIncome,    color: 'text-success',     sign: '+' },
-    { label: '💸 Chi tiêu thường', value: spendingTotal,  color: 'text-destructive', sign: '-' },
-    { label: '🤝 Trả nợ',         value: debtPaidTotal,  color: 'text-orange-500',  sign: '-' },
-    { label: '🎯 Nạp mục tiêu',   value: goalSavedTotal, color: 'text-purple-500',  sign: '-' },
-    { label: '🐷 Tiết kiệm',      value: savingsTotal,   color: 'text-primary',     sign: '-' },
+    { label: '💰 Thu nhập',     value: totalIncome,    color: 'text-success',     sign: '+' },
+    { label: '💸 Chi tiêu',     value: spendingTotal,  color: 'text-destructive', sign: '-' },
+    { label: '🎯 Nạp mục tiêu', value: goalSavedTotal, color: 'text-purple-500',  sign: '-' },
+    { label: '🐷 Tiết kiệm',    value: savingsTotal,   color: 'text-primary',     sign: '-' },
   ].filter(r => r.value > 0)
 
   return (
@@ -51,6 +52,16 @@ export function CashflowCard({
             {netBalance >= 0 ? '+' : ''}{formatMoney(netBalance, moneyHidden)}
           </span>
         </div>
+
+        {/* Trả nợ gốc — thông tin, KHÔNG ảnh hưởng số dư (đã tính trong chi tiêu) */}
+        {debtPaidTotal > 0 && (
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-xs text-muted-foreground">🤝 Trả nợ gốc trong tháng</span>
+            <span className={cn('text-xs text-muted-foreground', moneyHidden && 'blur-sm')}>
+              {formatMoney(debtPaidTotal, moneyHidden)}
+            </span>
+          </div>
+        )}
       </CardBody>
     </Card>
   )

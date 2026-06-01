@@ -20,6 +20,8 @@ export interface UserSettings {
   eventReminderTypes: number[] // [1, 6, 24] giờ trước
   tokenType?: TokenType | null
   tokenUpdatedAt?: Timestamp | null
+  // Danh sách id các thẻ hiển thị ở Tổng quan (theo thứ tự). Undefined → dùng default catalog.
+  dashboardMetrics?: string[]
   // Per-category budgets — key: `cat-budgets-${YYYY-MM}`
   [key: `cat-budgets-${string}`]: CategoryBudgets | unknown
 }
