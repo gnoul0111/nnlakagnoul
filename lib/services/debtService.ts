@@ -12,6 +12,7 @@ export interface AddDebtInput {
   name: string
   amount: number
   type: DebtType
+  date?: string     // YYYY-MM-DD — ngày phát sinh khoản nợ/vay
   dueDate?: string  // YYYY-MM-DD
   note?: string
 }
@@ -29,6 +30,7 @@ export async function addDebt(userId: string, input: AddDebtInput): Promise<stri
       name: input.name,
       amount: input.amount,
       type: input.type,
+      date: input.date ?? null,
       dueDate: input.dueDate ?? null,
       note: input.note ?? '',
       paidAmount: 0,
@@ -44,6 +46,7 @@ export async function addDebt(userId: string, input: AddDebtInput): Promise<stri
 export interface UpdateDebtInput {
   name?: string
   amount?: number
+  date?: string
   dueDate?: string
   note?: string
 }

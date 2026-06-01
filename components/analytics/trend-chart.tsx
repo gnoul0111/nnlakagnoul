@@ -92,7 +92,7 @@ export function TrendChart({ moneyHidden }: TrendChartProps) {
             ].map(item => (
               <div key={item.label} className="bg-muted/50 rounded-lg p-2 text-center">
                 <p className="text-[10px] text-muted-foreground leading-tight">{item.label}</p>
-                <p className={cn('text-xs font-bold text-foreground mt-0.5 truncate', moneyHidden && 'blur-sm')}>
+                <p className={cn('text-xs font-bold text-foreground mt-0.5 truncate')}>
                   {moneyHidden ? '••••' : formatCompact(item.value) + 'đ'}
                 </p>
                 {item.month && <p className="text-[10px] text-muted-foreground">{item.month}</p>}

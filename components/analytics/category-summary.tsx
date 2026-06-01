@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardBody } from '@/components/ui/card'
 import { MonthRangePicker } from '@/components/ui/date-picker'
 import { useAppData } from '@/hooks/useAppData'
-import { CATEGORIES } from '@/lib/types/expense'
+import { CATEGORIES, isConsumptionExpense } from '@/lib/types/expense'
 import { formatMoney, formatPercent } from '@/lib/utils/currency'
 import { thisMonth, prevMonth } from '@/lib/utils/date'
 import { cn } from '@/lib/utils/cn'
@@ -23,7 +23,7 @@ export function CategorySummary({ moneyHidden }: CategorySummaryProps) {
   // Filter expenses in range
   const rangeExpenses = expenses.filter(e =>
     !e.deleted &&
-    !e._debtId && !e._goalId && !e._savingsMonthKey &&
+    isConsumptionExpense(e) &&
     e.date.slice(0, 7) >= range.from &&
     e.date.slice(0, 7) <= range.to,
   )
@@ -74,7 +74,7 @@ export function CategorySummary({ moneyHidden }: CategorySummaryProps) {
                   <span className="text-sm font-medium text-foreground truncate">{cat.label}</span>
                 </div>
                 <span className="w-10 sm:w-16 text-right text-sm text-muted-foreground shrink-0">{cat.count}</span>
-                <span className={cn('w-24 sm:w-28 text-right text-sm font-semibold text-foreground shrink-0 truncate', moneyHidden && 'blur-sm')}>
+                <span className={cn('w-24 sm:w-28 text-right text-sm font-semibold text-foreground shrink-0 truncate')}>
                   {formatMoney(cat.amount, moneyHidden)}
                 </span>
                 <span className="w-10 text-right text-xs text-muted-foreground shrink-0">
@@ -88,7 +88,7 @@ export function CategorySummary({ moneyHidden }: CategorySummaryProps) {
               <span className="w-10 sm:w-16 text-right text-sm text-muted-foreground shrink-0">
                 {rangeExpenses.length}
               </span>
-              <span className={cn('w-24 sm:w-28 text-right text-sm font-bold text-foreground shrink-0 truncate', moneyHidden && 'blur-sm')}>
+              <span className={cn('w-24 sm:w-28 text-right text-sm font-bold text-foreground shrink-0 truncate')}>
                 {formatMoney(total, moneyHidden)}
               </span>
               <span className="w-10 text-right text-xs text-muted-foreground shrink-0">100%</span>

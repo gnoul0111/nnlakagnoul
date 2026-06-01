@@ -88,7 +88,7 @@ function DebtRow({ debt, type, moneyHidden, todayStr }: {
           </p>
         </div>
       </div>
-      <div className={cn('text-sm font-semibold shrink-0', moneyHidden ? 'blur-sm' : '')}>
+      <div className="text-sm font-semibold shrink-0">
         {formatMoney(remaining, moneyHidden)}
       </div>
     </div>

@@ -57,7 +57,7 @@ export function StatsCards({
               <TrendingDown className="w-3.5 h-3.5 text-destructive" />
             </div>
           </div>
-          <p className={cn('text-xl font-bold text-foreground', moneyHidden && 'blur-sm')}>
+          <p className={cn('text-xl font-bold text-foreground')}>
             {formatMoney(totalExpense, moneyHidden)}
           </p>
           {budgetPct !== null && (
@@ -77,7 +77,7 @@ export function StatsCards({
           </div>
           <p className="text-xl font-bold text-foreground">{txCount}</p>
           {!isWeek && avgPerTx > 0 && (
-            <p className={cn('text-xs text-muted-foreground', moneyHidden && 'blur-sm')}>
+            <p className={cn('text-xs text-muted-foreground')}>
               TB: {formatMoney(avgPerTx, moneyHidden)}
             </p>
           )}
@@ -93,11 +93,11 @@ export function StatsCards({
                   <PiggyBank className="w-3.5 h-3.5 text-[hsl(var(--success))]" />
                 </div>
               </div>
-              <p className={cn('text-xl font-bold text-[hsl(var(--success))]', moneyHidden && 'blur-sm')}>
+              <p className={cn('text-xl font-bold text-[hsl(var(--success))]')}>
                 {formatMoney(totalIncome, moneyHidden)}
               </p>
               {totalIncome > 0 && totalExpense > 0 && (
-                <p className={cn('text-xs text-muted-foreground', moneyHidden && 'blur-sm')}>
+                <p className={cn('text-xs text-muted-foreground')}>
                   Còn lại: {formatMoney(Math.max(0, totalIncome - totalExpense), moneyHidden)}
                 </p>
               )}
@@ -111,7 +111,7 @@ export function StatsCards({
                   <Calculator className="w-3.5 h-3.5 text-[hsl(var(--warning))]" />
                 </div>
               </div>
-              <p className={cn('text-xl font-bold text-foreground', moneyHidden && 'blur-sm')}>
+              <p className={cn('text-xl font-bold text-foreground')}>
                 {formatMoney(avgPerTx, moneyHidden)}
               </p>
               <p className="text-xs text-muted-foreground">{txCount} giao dịch</p>
@@ -140,11 +140,11 @@ export function StatsCards({
           </div>
 
           <div className="flex items-end gap-3">
-            <p className={cn('text-xl font-bold text-foreground', moneyHidden && 'blur-sm')}>
+            <p className={cn('text-xl font-bold text-foreground')}>
               {formatMoney(savingsDeposited ?? 0, moneyHidden)}
             </p>
             {savingsTarget !== undefined && savingsTarget > 0 && (
-              <p className={cn('text-sm text-muted-foreground mb-0.5', moneyHidden && 'blur-sm')}>
+              <p className={cn('text-sm text-muted-foreground mb-0.5')}>
                 / {formatMoney(savingsTarget, moneyHidden)}
               </p>
             )}

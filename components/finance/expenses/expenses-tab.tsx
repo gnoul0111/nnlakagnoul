@@ -12,7 +12,7 @@ import { useCurrentMonth }  from '@/hooks/useCurrentMonth'
 import { useAppend }        from '@/hooks/useAppend'
 import { useToast }         from '@/hooks/useToast'
 import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
-import { CATEGORIES, isSavingsExpense, type Expense } from '@/lib/types/expense'
+import { CATEGORIES, isSavingsExpense, isConsumptionExpense, isLinkedExpense, type Expense } from '@/lib/types/expense'
 import { EVENT_TYPES }      from '@/lib/types/events'
 import { formatMoney }      from '@/lib/utils/currency'
 import { formatDateShort, today } from '@/lib/utils/date'
@@ -48,7 +48,7 @@ export function ExpensesTab() {
     if (dateTo)   list = list.filter(e => e.date <= dateTo)
 
     const spending = list
-      .filter(e => !e._debtId && !e._goalId && !e._savingsMonthKey)
+      .filter(isConsumptionExpense)
       .reduce((s, e) => s + e.amount, 0)
 
     const grouped = list
@@ -109,7 +109,7 @@ export function ExpensesTab() {
         <span className="text-sm text-muted-foreground">
           {hasFilter ? 'Tổng trong khoảng ngày' : 'Tổng chi tiêu thực'}
         </span>
-        <span className={cn('text-base font-bold text-destructive', moneyHidden && 'blur-sm')}>
+        <span className={cn('text-base font-bold text-destructive')}>
           {formatMoney(totalSpending, moneyHidden)}
         </span>
       </div>
@@ -125,13 +125,13 @@ export function ExpensesTab() {
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   {formatDateShort(date)}
                 </span>
-                <span className={cn('text-xs font-semibold text-destructive', moneyHidden && 'blur-sm')}>
-                  {formatMoney(expenses.filter(e => !e._debtId && !e._goalId && !e._savingsMonthKey).reduce((s, e) => s + e.amount, 0), moneyHidden)}
+                <span className={cn('text-xs font-semibold text-destructive')}>
+                  {formatMoney(expenses.filter(isConsumptionExpense).reduce((s, e) => s + e.amount, 0), moneyHidden)}
                 </span>
               </div>
               {expenses.map((expense, i) => {
                 const cat       = catMap[expense.category] ?? catMap.other
-                const isLinked  = !!(expense._debtId || expense._goalId || expense._savingsMonthKey)
+                const isLinked  = isLinkedExpense(expense)
                 const isSavings = isSavingsExpense(expense)
                 return (
                   <div key={expense.id}
@@ -155,7 +155,7 @@ export function ExpensesTab() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {/* Bỏ dấu "-" — màu đỏ đủ phân biệt chi tiêu */}
-                      <span className={cn('text-sm font-semibold text-destructive mr-1', moneyHidden && 'blur-sm')}>
+                      <span className={cn('text-sm font-semibold text-destructive mr-1')}>
                         {formatMoney(expense.amount, moneyHidden)}
                       </span>
                       {!isSavings ? (

@@ -17,7 +17,7 @@
  */
 
 import {
-  getSpendingExpenses,
+  getConsumptionExpenses,
   sumSpending,
   sumIncome,
   calcBudgetSummary,
@@ -144,9 +144,9 @@ describe('getBudgetAlertLevel', () => {
   })
 })
 
-// ─── getSpendingExpenses ──────────────────────────────────────────────────────
+// ─── getConsumptionExpenses ──────────────────────────────────────────────────────
 
-describe('getSpendingExpenses', () => {
+describe('getConsumptionExpenses', () => {
   const MK = '2026-03'
 
   test('excludes deleted expenses', () => {
@@ -154,15 +154,16 @@ describe('getSpendingExpenses', () => {
       exp(100_000, '2026-03-01'),
       exp(200_000, '2026-03-02', 'food', { deleted: true }),
     ]
-    expect(getSpendingExpenses(expenses, MK)).toHaveLength(1)
+    expect(getConsumptionExpenses(expenses, MK)).toHaveLength(1)
   })
 
-  test('excludes linked debt expenses (_debtId)', () => {
+  test('includes debt-financed expenses (_debtId) as consumption', () => {
     const expenses = [
       exp(100_000, '2026-03-01'),
       exp(500_000, '2026-03-05', 'other', { _debtId: 'debt_1' }),
     ]
-    expect(getSpendingExpenses(expenses, MK)).toHaveLength(1)
+    // FULL model: chi tài trợ bằng nợ là tiêu dùng thật → được tính
+    expect(getConsumptionExpenses(expenses, MK)).toHaveLength(2)
   })
 
   test('excludes linked goal expenses (_goalId)', () => {
@@ -170,7 +171,7 @@ describe('getSpendingExpenses', () => {
       exp(100_000, '2026-03-01'),
       exp(500_000, '2026-03-10', 'other', { _goalId: 'goal_1' }),
     ]
-    expect(getSpendingExpenses(expenses, MK)).toHaveLength(1)
+    expect(getConsumptionExpenses(expenses, MK)).toHaveLength(1)
   })
 
   test('excludes savings expenses (_savingsMonthKey)', () => {
@@ -178,7 +179,7 @@ describe('getSpendingExpenses', () => {
       exp(100_000, '2026-03-01'),
       exp(200_000, '2026-03-15', 'other', { _savingsMonthKey: MK }),
     ]
-    expect(getSpendingExpenses(expenses, MK)).toHaveLength(1)
+    expect(getConsumptionExpenses(expenses, MK)).toHaveLength(1)
   })
 
   test('excludes expenses from different month', () => {
@@ -186,11 +187,11 @@ describe('getSpendingExpenses', () => {
       exp(100_000, '2026-03-01'),
       exp(200_000, '2026-02-28'), // previous month
     ]
-    expect(getSpendingExpenses(expenses, MK)).toHaveLength(1)
+    expect(getConsumptionExpenses(expenses, MK)).toHaveLength(1)
   })
 
   test('empty input returns empty array', () => {
-    expect(getSpendingExpenses([], MK)).toHaveLength(0)
+    expect(getConsumptionExpenses([], MK)).toHaveLength(0)
   })
 })
 
@@ -199,15 +200,15 @@ describe('getSpendingExpenses', () => {
 describe('sumSpending', () => {
   const MK = '2026-03'
 
-  test('sums only unlinked, non-deleted expenses in month', () => {
+  test('sums consumption (gồm _debtId), loại wrong-month/deleted', () => {
     const expenses = [
       exp(100_000, '2026-03-01'),
       exp(200_000, '2026-03-10'),
-      exp(999_000, '2026-03-15', 'other', { _debtId: 'd1' }),   // excluded
+      exp(999_000, '2026-03-15', 'other', { _debtId: 'd1' }),   // chi tài trợ bằng nợ → TÍNH
       exp(500_000, '2026-02-28'),                                  // excluded (wrong month)
       exp(150_000, '2026-03-20', 'food', { deleted: true }),      // excluded
     ]
-    expect(sumSpending(expenses, MK)).toBe(300_000)
+    expect(sumSpending(expenses, MK)).toBe(1_299_000)
   })
 
   test('returns 0 for empty array', () => {
@@ -394,13 +395,15 @@ describe('calcCategorySpending', () => {
     expect(calcCategorySpending([], MK)).toHaveLength(0)
   })
 
-  test('linked expenses excluded from category totals', () => {
+  test('goal/savings excluded from category totals; debt-financed included', () => {
     const expenses = [
       exp(500_000, '2026-03-01', 'food'),
-      exp(200_000, '2026-03-05', 'food', { _debtId: 'd1' }),
+      exp(200_000, '2026-03-05', 'food', { _debtId: 'd1' }),        // tài trợ bằng nợ → tính
+      exp(300_000, '2026-03-06', 'food', { _goalId: 'g1' }),         // nạp mục tiêu → loại
+      exp(400_000, '2026-03-07', 'food', { _savingsMonthKey: MK }),  // tiết kiệm → loại
     ]
     const result = calcCategorySpending(expenses, MK)
-    expect(result[0].amount).toBe(500_000)  // linked expense not counted
+    expect(result[0].amount).toBe(700_000)  // 500k + 200k(nợ); goal/tiết kiệm bị loại
   })
 
   test('2-category percent split: 750k + 250k = 75% + 25%', () => {
@@ -460,30 +463,36 @@ describe('calcCashflow', () => {
     expect(result.netBalance).toBe(1_500_000)
   })
 
-  test('debt payments counted from debt.payments, not from linked expenses', () => {
+  test('trả nợ gốc (borrow) trừ vào số dư; TỔNG CHI vẫn chỉ là tiêu dùng', () => {
     const debt: Debt = {
       id: 'debt_1', userId: 'u1', name: 'Bạn A',
       amount: 2_000_000, type: 'borrow',
       paidAmount: 500_000,
-      payments: [
-        { id: 'pay_1', amount: 500_000, date: '2026-03-05' },
-      ],
-      deleted: false,
-      dueDate: null,
-      note: '',
-      createdAt: 0,
+      payments: [{ id: 'pay_1', amount: 500_000, date: '2026-03-05' }],
+      deleted: false, dueDate: null, note: '', createdAt: 0,
     }
-    // Linked expense for the payment — should NOT double-count
-    const expenses = [
-      exp(1_000_000, '2026-03-01'),
-      exp(500_000,   '2026-03-05', 'other', { _debtId: 'debt_1' }),  // linked → excluded from spending
-    ]
-    const incomes = [inc(5_000_000, MK)]
-    const result  = calcCashflow(expenses, incomes, [debt], noGoals, null, MK)
+    // Chi thường (KHÔNG _debtId) — đây là trả nợ cũ trong tháng này
+    const expenses = [exp(1_000_000, '2026-03-01')]
+    const incomes  = [inc(5_000_000, MK)]
+    const result   = calcCashflow(expenses, incomes, [debt], noGoals, null, MK)
 
-    expect(result.spendingTotal).toBe(1_000_000)   // linked exp excluded
-    expect(result.debtPaidTotal).toBe(500_000)      // from debt.payments
-    expect(result.totalCashOut).toBe(1_500_000)     // no double-count
+    expect(result.consumptionTotal).toBe(1_000_000)  // TỔNG CHI = tiêu dùng (không gồm trả nợ)
+    expect(result.debtPaidTotal).toBe(500_000)
+    expect(result.totalCashOut).toBe(1_500_000)       // tiêu dùng + trả nợ gốc
+    expect(result.netBalance).toBe(3_500_000)         // 5tr − 1.5tr
+  })
+
+  test('nợ lend (mình cho vay) KHÔNG tính vào debtPaidTotal (tiền vào, không phải ra)', () => {
+    const lendDebt: Debt = {
+      id: 'debt_lend', userId: 'u1', name: 'Bạn B',
+      amount: 1_000_000, type: 'lend',
+      paidAmount: 400_000,
+      payments: [{ id: 'p1', amount: 400_000, date: '2026-03-08' }],  // bạn B trả lại mình → tiền VÀO
+      deleted: false, dueDate: null, note: '', createdAt: 0,
+    }
+    const result = calcCashflow([], [], [lendDebt], noGoals, null, MK)
+    expect(result.debtPaidTotal).toBe(0)
+    expect(result.totalCashOut).toBe(0)
   })
 
   test('goal deposits counted from goal.deposits in the month', () => {

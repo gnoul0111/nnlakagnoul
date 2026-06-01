@@ -72,7 +72,7 @@ export function AnimatedNumber({
   }, [value, duration])
 
   if (hidden) {
-    return <span className={cn('blur-sm select-none', className)}>{HIDDEN}</span>
+    return <span className={cn('select-none', className)}>{HIDDEN}</span>
   }
 
   return <span className={className}>{formatter(display)}</span>

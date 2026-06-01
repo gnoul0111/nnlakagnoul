@@ -12,7 +12,7 @@ import {
   buildDailyData,
   buildMonthlyData,
 } from '@/lib/utils/analyticsCalc'
-import type { Expense } from '@/lib/types/expense'
+import { isConsumptionExpense, type Expense } from '@/lib/types/expense'
 import type { Income } from '@/lib/types/income'
 
 // Re-export types + pure functions từ analyticsCalc — single source of truth
@@ -32,9 +32,7 @@ export function getPeriodExpenses(expenses: Expense[], range: PeriodRange): Expe
 }
 
 export function getSpendingForPeriod(expenses: Expense[], range: PeriodRange): Expense[] {
-  return getPeriodExpenses(expenses, range).filter(
-    e => !e._debtId && !e._goalId && !e._savingsMonthKey,
-  )
+  return getPeriodExpenses(expenses, range).filter(isConsumptionExpense)
 }
 
 export function getPeriodIncomes(incomes: Income[], range: PeriodRange): Income[] {

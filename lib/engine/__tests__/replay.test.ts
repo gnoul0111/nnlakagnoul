@@ -80,7 +80,7 @@ describe('replay — Expense', () => {
     expect(getActiveExpenses(state)).toHaveLength(0)
   })
 
-  test('getSpendingExpenses loại bỏ linked expenses', () => {
+  test('getSpendingExpenses: gồm chi tài trợ bằng nợ (_debtId), loại goal/tiết kiệm', () => {
     const events = [
       makeEvent('EXPENSE_ADDED', { id: 'exp_1', amount: 100000, category: 'food', date: '2026-03-10', note: '' }),
       makeEvent('EXPENSE_ADDED', { id: 'exp_2', amount: 200000, category: 'other', date: '2026-03-11', note: '', _debtId: 'debt_1' }),
@@ -89,8 +89,8 @@ describe('replay — Expense', () => {
     ]
     const state = replay(events)
     const spending = getSpendingExpenses(state, '2026-03')
-    expect(spending).toHaveLength(1)
-    expect(spending[0].id).toBe('exp_1')
+    // _debtId là tiêu dùng (tài trợ bằng nợ); _goalId/_savingsMonthKey là chuyển dịch → loại
+    expect(spending.map(e => e.id).sort()).toEqual(['exp_1', 'exp_2'])
   })
 
   test('events sort by timestamp — không phụ thuộc thứ tự array', () => {

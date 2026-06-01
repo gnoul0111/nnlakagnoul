@@ -59,6 +59,24 @@ export function isLinkedExpense(expense: Expense): boolean {
   return !!(expense._debtId || expense._goalId || expense._savingsMonthKey)
 }
 
+/**
+ * Chi tiêu "tiêu dùng" — tính vào TỔNG CHI / ngân sách.
+ *
+ * GỒM: chi tiêu thường + chi tài trợ bằng nợ (`_debtId`) — vì đó là tiêu dùng
+ * THẬT, chỉ khác ở chỗ được tài trợ bằng khoản vay. Việc trả nợ gốc sau đó là
+ * CHUYỂN DỊCH tiền (không phải tiêu dùng mới) nên được tính riêng, không cộng
+ * lại vào TỔNG CHI → tránh double count.
+ *
+ * KHÔNG GỒM: nạp mục tiêu (`_goalId`) và tiết kiệm (`_savingsMonthKey`) — đó là
+ * chuyển tiền sang quỹ của CHÍNH MÌNH, tiền không mất đi, nên không phải tiêu dùng.
+ *
+ * SINGLE SOURCE OF TRUTH cho "đâu là chi tiêu được tính". Mọi nơi tính tổng chi
+ * tiêu PHẢI dùng hàm này. KHÔNG kiểm tra `deleted` (call site tự lọc).
+ */
+export function isConsumptionExpense(expense: Expense): boolean {
+  return !expense._goalId && !expense._savingsMonthKey
+}
+
 /** Expense từ trả nợ */
 export function isDebtExpense(expense: Expense): boolean {
   return !!expense._debtId

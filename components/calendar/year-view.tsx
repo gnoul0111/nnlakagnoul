@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils/cn'
 import { thisMonth } from '@/lib/utils/date'
 import { useAppData } from '@/hooks/useAppData'
 import { formatCompact } from '@/lib/utils/currency'
+import { isConsumptionExpense } from '@/lib/types/expense'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
 import type { CalendarMode } from './calendar-header'
 
@@ -27,7 +28,7 @@ export function YearView({ year, mode, calendarEvents, onSelectMonth }: YearView
       const key = `${year}-${m}`
 
       const spending = expenses
-        .filter(e => e.date.startsWith(key) && !e._debtId && !e._goalId && !e._savingsMonthKey)
+        .filter(e => e.date.startsWith(key) && isConsumptionExpense(e))
         .reduce((s, e) => s + e.amount, 0)
 
       const income = allIncomes

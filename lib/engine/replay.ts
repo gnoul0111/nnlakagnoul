@@ -1,5 +1,5 @@
 import type { EventDoc } from '@/lib/types/events'
-import type { Expense }  from '@/lib/types/expense'
+import { isConsumptionExpense, type Expense }  from '@/lib/types/expense'
 import type { Income }   from '@/lib/types/income'
 import type { Goal, GoalDeposit } from '@/lib/types/goal'
 import type { Debt, DebtPayment } from '@/lib/types/debt'
@@ -606,9 +606,7 @@ export function getExpensesByMonth(state: ReplayedState, monthKey: string): Expe
   return getActiveExpenses(state).filter(e => e.date?.startsWith(monthKey))
 }
 export function getSpendingExpenses(state: ReplayedState, monthKey: string): Expense[] {
-  return getExpensesByMonth(state, monthKey).filter(
-    e => !e._debtId && !e._goalId && !e._savingsMonthKey,
-  )
+  return getExpensesByMonth(state, monthKey).filter(isConsumptionExpense)
 }
 export function getIncomesByMonth(state: ReplayedState, monthKey: string): Income[] {
   return state.incomes.filter(i => !i.deleted && i.month === monthKey)

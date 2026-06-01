@@ -104,7 +104,7 @@ export function TemplatesTab() {
                   <p className="text-xs text-muted-foreground">{cat.label}{tpl.note ? ` · ${tpl.note}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className={cn('text-sm font-semibold text-foreground mr-1', moneyHidden && 'blur-sm')}>
+                  <span className={cn('text-sm font-semibold text-foreground mr-1')}>
                     {formatMoney(tpl.amount, moneyHidden)}
                   </span>
                   <button onClick={() => handleUse(tpl)} disabled={usingId === tpl.id}

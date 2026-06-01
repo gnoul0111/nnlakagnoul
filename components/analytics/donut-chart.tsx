@@ -77,7 +77,7 @@ export function DonutChart({ data, moneyHidden }: DonutChartProps) {
             {/* Center total */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <p className="text-[10px] text-muted-foreground">Tổng</p>
-              <p className={cn('text-sm font-bold text-foreground', moneyHidden && 'blur-sm')}>
+              <p className={cn('text-sm font-bold text-foreground')}>
                 {formatMoney(total, moneyHidden)}
               </p>
             </div>
@@ -95,7 +95,7 @@ export function DonutChart({ data, moneyHidden }: DonutChartProps) {
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-foreground truncate">{cat.icon} {cat.label}</span>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className={cn('text-sm font-semibold text-foreground', moneyHidden && 'blur-sm')}>
+                        <span className={cn('text-sm font-semibold text-foreground')}>
                           {formatMoney(item.amount, moneyHidden)}
                         </span>
                         <span className="text-xs text-muted-foreground w-8 text-right">

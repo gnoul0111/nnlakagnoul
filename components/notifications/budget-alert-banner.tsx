@@ -8,6 +8,7 @@ import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { formatVND }            from '@/lib/utils/currency'
 import { thisMonth, today }     from '@/lib/utils/date'
 import { cn }                   from '@/lib/utils/cn'
+import { isConsumptionExpense } from '@/lib/types/expense'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -50,13 +51,7 @@ export function BudgetAlertBanner() {
     if (budgetAmount <= 0) return { usedAmount: 0, budgetAmount, usedPct: 0, shouldShow: false }
 
     const usedAmount = expenses
-      .filter(
-        e =>
-          e.date.startsWith(monthKey) &&
-          !e._debtId &&
-          !e._goalId &&
-          !e._savingsMonthKey,
-      )
+      .filter(e => e.date.startsWith(monthKey) && isConsumptionExpense(e))
       .reduce((s, e) => s + e.amount, 0)
 
     const usedPct = usedAmount / budgetAmount

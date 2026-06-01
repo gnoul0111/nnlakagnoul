@@ -34,6 +34,7 @@ const debtSchema = z.object({
   name:    z.string().min(1, 'Nhập tên.'),
   amount:  z.string().refine(v => parseAmount(v) > 0, 'Nhập số tiền.'),
   type:    z.enum(['lend', 'borrow']),
+  date:    z.string().min(1, 'Chọn ngày.'),
   dueDate: z.string().optional(),
   note:    z.string().optional(),
 })
@@ -112,8 +113,8 @@ export function DebtsTab() {
   const totalLendRemaining   = lendActive.reduce((s, d) => s + computeRemaining(d), 0)
 
   const openDebtEdit = (debt?: Debt) => {
-    if (debt) df.reset({ name: debt.name, amount: String(debt.amount), type: debt.type, dueDate: debt.dueDate ?? undefined, note: debt.note })
-    else df.reset({ type: 'borrow', dueDate: '' })
+    if (debt) df.reset({ name: debt.name, amount: String(debt.amount), type: debt.type, date: debt.date ?? today(), dueDate: debt.dueDate ?? undefined, note: debt.note })
+    else df.reset({ type: 'borrow', date: today(), dueDate: '' })
     setDebtForm({ open: true, edit: debt })
   }
 
@@ -135,6 +136,7 @@ export function DebtsTab() {
         name:        values.name,
         amount,
         type:        values.type,
+        date:        values.date ?? null,
         dueDate:     values.dueDate ?? null,
         note:        values.note ?? '',
         paidAmount:  0,
@@ -148,6 +150,7 @@ export function DebtsTab() {
         id:      debtForm.edit.id,
         name:    values.name,
         amount,
+        date:    values.date ?? null,
         dueDate: values.dueDate ?? null,
         note:    values.note ?? '',
       }).rollback
@@ -157,9 +160,9 @@ export function DebtsTab() {
 
     try {
       if (debtForm.edit) {
-        await updateDebt(user.uid, debtForm.edit.id, { name: values.name, amount, dueDate: values.dueDate, note: values.note })
+        await updateDebt(user.uid, debtForm.edit.id, { name: values.name, amount, date: values.date, dueDate: values.dueDate, note: values.note })
       } else {
-        await addDebt(user.uid, { id: preDebtId, name: values.name, amount, type: values.type, dueDate: values.dueDate, note: values.note })
+        await addDebt(user.uid, { id: preDebtId, name: values.name, amount, type: values.type, date: values.date, dueDate: values.dueDate, note: values.note })
       }
       await sync()
       toast.success(debtForm.edit ? 'Đã cập nhật khoản nợ!' : 'Đã thêm khoản nợ!')
@@ -254,6 +257,11 @@ export function DebtsTab() {
           const overdue   = isDebtOverdue(debt, todayStr)
           const upcoming  = isDebtUpcoming(debt, todayStr)
           const settled   = remaining <= 0
+          const meta = [
+            debt.date    ? `Ngày ${formatDateVN(debt.date)}`      : null,
+            debt.dueDate ? `Đến hạn ${formatDateVN(debt.dueDate)}` : null,
+            debt.note || null,
+          ].filter(Boolean).join(' · ')
           return (
             <div key={debt.id} className="bg-card border border-border rounded-xl overflow-hidden">
               <div className="p-4 space-y-3">
@@ -265,10 +273,7 @@ export function DebtsTab() {
                       {overdue  && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">Quá hạn</span>}
                       {upcoming && !overdue && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-warning/10 text-warning">Sắp đến hạn</span>}
                     </div>
-                    {debt.dueDate
-                      ? <p className="text-xs text-muted-foreground mt-0.5">Đến hạn: {formatDateVN(debt.dueDate)}{debt.note ? ` · ${debt.note}` : ''}</p>
-                      : debt.note ? <p className="text-xs text-muted-foreground mt-0.5">{debt.note}</p> : null
-                    }
+                    {meta && <p className="text-xs text-muted-foreground mt-0.5">{meta}</p>}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-2">
                     <button onClick={() => openDebtEdit(debt)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors">
@@ -288,7 +293,7 @@ export function DebtsTab() {
                   ].map(item => (
                     <div key={item.l} className="bg-muted/50 rounded-lg p-1.5">
                       <p className="text-[10px] text-muted-foreground">{item.l}</p>
-                      <p className={cn('text-xs font-bold mt-0.5', item.cls, moneyHidden && 'blur-sm')}>{formatMoney(item.v, moneyHidden)}</p>
+                      <p className={cn('text-xs font-bold mt-0.5', item.cls)}>{formatMoney(item.v, moneyHidden)}</p>
                     </div>
                   ))}
                 </div>
@@ -299,7 +304,7 @@ export function DebtsTab() {
                       <div key={p.id} className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">{formatDateVN(p.date)}</span>
                         <div className="flex items-center gap-1">
-                          <span className={cn('font-medium text-foreground', moneyHidden && 'blur-sm')}>{formatMoney(p.amount, moneyHidden)}</span>
+                          <span className={cn('font-medium text-foreground')}>{formatMoney(p.amount, moneyHidden)}</span>
                           <button onClick={() => setDeletePaymentTarget({ debt, payment: p })}
                             className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
                             <Trash2 className="w-3 h-3" />
@@ -329,13 +334,13 @@ export function DebtsTab() {
         <div className="grid grid-cols-2 gap-2 flex-1">
           <div className="bg-card border border-border rounded-xl p-3">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">🙏 Tôi đang nợ</p>
-            <p className={cn('text-base font-bold mt-1', totalBorrowRemaining > 0 ? 'text-destructive' : 'text-muted-foreground', moneyHidden && 'blur-sm')}>
+            <p className={cn('text-base font-bold mt-1', totalBorrowRemaining > 0 ? 'text-destructive' : 'text-muted-foreground')}>
               {formatMoney(totalBorrowRemaining, moneyHidden)}
             </p>
           </div>
           <div className="bg-card border border-border rounded-xl p-3">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">🤲 Cho vay</p>
-            <p className={cn('text-base font-bold mt-1', totalLendRemaining > 0 ? 'text-success' : 'text-muted-foreground', moneyHidden && 'blur-sm')}>
+            <p className={cn('text-base font-bold mt-1', totalLendRemaining > 0 ? 'text-success' : 'text-muted-foreground')}>
               {formatMoney(totalLendRemaining, moneyHidden)}
             </p>
           </div>
@@ -391,9 +396,12 @@ export function DebtsTab() {
           <FormField label="Tên người" error={df.formState.errors.name?.message} required>
             <Input placeholder="Nguyễn Văn A" autoFocus {...df.register('name')} />
           </FormField>
+          <FormField label="Số tiền (₫)" error={df.formState.errors.amount?.message} required>
+            <AmountInput placeholder="0" {...df.register('amount')} />
+          </FormField>
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Số tiền (₫)" error={df.formState.errors.amount?.message} required>
-              <AmountInput placeholder="0" {...df.register('amount')} />
+            <FormField label="Ngày" error={df.formState.errors.date?.message} required>
+              <DatePicker value={df.watch('date') ?? ''} onChange={v => df.setValue('date', v)} />
             </FormField>
             <FormField label="Đến hạn" error={df.formState.errors.dueDate?.message}>
               <DatePicker value={df.watch('dueDate') ?? ''} onChange={v => df.setValue('dueDate', v)} />

@@ -41,7 +41,7 @@ export function TopExpenses({ expenses, moneyHidden }: TopExpensesProps) {
                   <p className="text-sm font-medium text-foreground truncate">
                     {(expense as any).title || expense.note || cat.label}
                   </p>
-                  <p className={cn('text-sm font-bold text-destructive shrink-0', moneyHidden && 'blur-sm')}>
+                  <p className={cn('text-sm font-bold text-destructive shrink-0')}>
                     {formatMoney(expense.amount, moneyHidden)}
                   </p>
                 </div>

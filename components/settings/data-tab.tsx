@@ -18,6 +18,7 @@ import {
   exportJSON, exportExcel, validateBackup, importJSON,
   type ImportPreview,
 } from '@/lib/services/exportService'
+import { isConsumptionExpense } from '@/lib/types/expense'
 import { cn } from '@/lib/utils/cn'
 
 // ─── Build info ───────────────────────────────────────────────────────────────
@@ -105,7 +106,7 @@ export function DataTab() {
   const handleExportExcel = async () => {
     setExportingXLSX(true)
     try {
-      const spending = expenses.filter(e => !e._debtId && !e._goalId && !e._savingsMonthKey)
+      const spending = expenses.filter(isConsumptionExpense)
       await exportExcel(spending)
       toast.success(`Đã xuất ${spending.length} chi tiêu`)
     } catch { toast.error('Xuất Excel thất bại') }
@@ -213,7 +214,7 @@ export function DataTab() {
         <ActionRow
           icon={<FileSpreadsheet className="w-5 h-5" />}
           title="Xuất Excel chi tiêu"
-          subtitle={`${expenses.filter(e => !e._debtId && !e._goalId && !e._savingsMonthKey).length} giao dịch`}
+          subtitle={`${expenses.filter(isConsumptionExpense).length} giao dịch`}
           loading={exportingXLSX}
           action={
             <Button size="sm" variant="outline" onClick={handleExportExcel} disabled={exportingXLSX}

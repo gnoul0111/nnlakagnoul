@@ -129,7 +129,7 @@ export function IncomeTab() {
 
       <div className="flex items-center justify-between px-4 py-3 bg-success/5 border border-success/20 rounded-xl">
         <span className="text-sm text-muted-foreground">Tổng thu nhập</span>
-        <span className={cn('text-base font-bold text-success', moneyHidden && 'blur-sm')}>
+        <span className={cn('text-base font-bold text-success')}>
           {formatMoney(total, moneyHidden)}
         </span>
       </div>
@@ -153,7 +153,7 @@ export function IncomeTab() {
                 <p className="text-xs text-muted-foreground">{formatDateShort(income.date)}{income.note ? ` · ${income.note}` : ''}</p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <span className={cn('text-sm font-semibold text-success mr-1', moneyHidden && 'blur-sm')}>
+                <span className={cn('text-sm font-semibold text-success mr-1')}>
                   +{formatMoney(income.amount, moneyHidden)}
                 </span>
                 <button onClick={() => setDeleteTarget(income)}

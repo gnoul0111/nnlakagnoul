@@ -5,7 +5,7 @@ import { ChevronRight, Receipt } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardBody } from '@/components/ui/card'
 import { formatMoney } from '@/lib/utils/currency'
 import { formatRelativeDate } from '@/lib/utils/date'
-import { CATEGORIES } from '@/lib/types/expense'
+import { CATEGORIES, isLinkedExpense } from '@/lib/types/expense'
 import type { Expense } from '@/lib/types/expense'
 import { cn } from '@/lib/utils/cn'
 
@@ -45,7 +45,7 @@ export function RecentExpenses({ expenses, moneyHidden }: RecentExpensesProps) {
           <ul className="space-y-0 -mx-4">
             {sorted.map((expense, i) => {
               const cat = categoryMap[expense.category] ?? categoryMap.other
-              const isLinked = !!(expense._debtId || expense._goalId || expense._savingsMonthKey)
+              const isLinked = isLinkedExpense(expense)
               return (
                 <li
                   key={expense.id}
@@ -75,7 +75,7 @@ export function RecentExpenses({ expenses, moneyHidden }: RecentExpensesProps) {
                   </div>
 
                   {/* Amount */}
-                  <p className={cn('text-sm font-semibold text-destructive shrink-0', moneyHidden && 'blur-sm')}>
+                  <p className="text-sm font-semibold text-destructive shrink-0">
                     {formatMoney(expense.amount, moneyHidden)}
                   </p>
                 </li>

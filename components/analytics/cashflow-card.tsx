@@ -19,12 +19,14 @@ export function CashflowCard({
   totalIncome, spendingTotal, debtPaidTotal,
   goalSavedTotal, savingsTotal, totalCashOut, netBalance, moneyHidden,
 }: CashflowCardProps) {
+  // Các dòng cộng/trừ ra "Số dư thực". Chi tiêu = tiêu dùng (đã gồm chi tài trợ
+  // bằng nợ). Trả nợ gốc cũng là tiền thật rời ví → trừ vào số dư.
   const rows = [
-    { label: '💰 Thu nhập',       value: totalIncome,    color: 'text-success',     sign: '+' },
-    { label: '💸 Chi tiêu thường', value: spendingTotal,  color: 'text-destructive', sign: '-' },
-    { label: '🤝 Trả nợ',         value: debtPaidTotal,  color: 'text-orange-500',  sign: '-' },
-    { label: '🎯 Nạp mục tiêu',   value: goalSavedTotal, color: 'text-purple-500',  sign: '-' },
-    { label: '🐷 Tiết kiệm',      value: savingsTotal,   color: 'text-primary',     sign: '-' },
+    { label: '💰 Thu nhập',     value: totalIncome,    color: 'text-success',     sign: '+' },
+    { label: '💸 Chi tiêu',     value: spendingTotal,  color: 'text-destructive', sign: '-' },
+    { label: '🤝 Trả nợ',       value: debtPaidTotal,  color: 'text-orange-500',  sign: '-' },
+    { label: '🎯 Nạp mục tiêu', value: goalSavedTotal, color: 'text-purple-500',  sign: '-' },
+    { label: '🐷 Tiết kiệm',    value: savingsTotal,   color: 'text-primary',     sign: '-' },
   ].filter(r => r.value > 0)
 
   return (
@@ -34,7 +36,7 @@ export function CashflowCard({
         {rows.map(row => (
           <div key={row.label} className="flex items-center justify-between">
             <span className="text-sm text-foreground">{row.label}</span>
-            <span className={cn('text-sm font-semibold', row.color, moneyHidden && 'blur-sm')}>
+            <span className={cn('text-sm font-semibold', row.color)}>
               {row.sign}{formatMoney(row.value, moneyHidden)}
             </span>
           </div>
@@ -46,7 +48,6 @@ export function CashflowCard({
           <span className={cn(
             'text-base font-bold',
             netBalance >= 0 ? 'text-success' : 'text-destructive',
-            moneyHidden && 'blur-sm',
           )}>
             {netBalance >= 0 ? '+' : ''}{formatMoney(netBalance, moneyHidden)}
           </span>
