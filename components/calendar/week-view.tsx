@@ -6,6 +6,7 @@ import { today, parseLocalDate, toLocalDateString, getWeekRange } from '@/lib/ut
 import { useAppData } from '@/hooks/useAppData'
 import { formatCompact } from '@/lib/utils/currency'
 import { useSettingsStore } from '@/lib/store/settingsStore'
+import { isLinkedExpense } from '@/lib/types/expense'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
 import type { CalendarMode } from './calendar-header'
 
@@ -46,7 +47,7 @@ export function WeekView({ anchor, mode, calendarEvents, selectedDate, onSelectD
   const spendingMap = useMemo(() => {
     const map: Record<string, number> = {}
     for (const e of expenses) {
-      if (e._debtId || e._goalId || e._savingsMonthKey) continue
+      if (isLinkedExpense(e)) continue
       map[e.date] = (map[e.date] ?? 0) + e.amount
     }
     return map

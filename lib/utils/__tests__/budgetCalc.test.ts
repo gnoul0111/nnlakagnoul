@@ -17,7 +17,7 @@
  */
 
 import {
-  getSpendingExpenses,
+  getConsumptionExpenses,
   sumSpending,
   sumIncome,
   calcBudgetSummary,
@@ -144,9 +144,9 @@ describe('getBudgetAlertLevel', () => {
   })
 })
 
-// ─── getSpendingExpenses ──────────────────────────────────────────────────────
+// ─── getConsumptionExpenses ──────────────────────────────────────────────────────
 
-describe('getSpendingExpenses', () => {
+describe('getConsumptionExpenses', () => {
   const MK = '2026-03'
 
   test('excludes deleted expenses', () => {
@@ -154,7 +154,7 @@ describe('getSpendingExpenses', () => {
       exp(100_000, '2026-03-01'),
       exp(200_000, '2026-03-02', 'food', { deleted: true }),
     ]
-    expect(getSpendingExpenses(expenses, MK)).toHaveLength(1)
+    expect(getConsumptionExpenses(expenses, MK)).toHaveLength(1)
   })
 
   test('excludes linked debt expenses (_debtId)', () => {
@@ -162,7 +162,7 @@ describe('getSpendingExpenses', () => {
       exp(100_000, '2026-03-01'),
       exp(500_000, '2026-03-05', 'other', { _debtId: 'debt_1' }),
     ]
-    expect(getSpendingExpenses(expenses, MK)).toHaveLength(1)
+    expect(getConsumptionExpenses(expenses, MK)).toHaveLength(1)
   })
 
   test('excludes linked goal expenses (_goalId)', () => {
@@ -170,7 +170,7 @@ describe('getSpendingExpenses', () => {
       exp(100_000, '2026-03-01'),
       exp(500_000, '2026-03-10', 'other', { _goalId: 'goal_1' }),
     ]
-    expect(getSpendingExpenses(expenses, MK)).toHaveLength(1)
+    expect(getConsumptionExpenses(expenses, MK)).toHaveLength(1)
   })
 
   test('excludes savings expenses (_savingsMonthKey)', () => {
@@ -178,7 +178,7 @@ describe('getSpendingExpenses', () => {
       exp(100_000, '2026-03-01'),
       exp(200_000, '2026-03-15', 'other', { _savingsMonthKey: MK }),
     ]
-    expect(getSpendingExpenses(expenses, MK)).toHaveLength(1)
+    expect(getConsumptionExpenses(expenses, MK)).toHaveLength(1)
   })
 
   test('excludes expenses from different month', () => {
@@ -186,11 +186,11 @@ describe('getSpendingExpenses', () => {
       exp(100_000, '2026-03-01'),
       exp(200_000, '2026-02-28'), // previous month
     ]
-    expect(getSpendingExpenses(expenses, MK)).toHaveLength(1)
+    expect(getConsumptionExpenses(expenses, MK)).toHaveLength(1)
   })
 
   test('empty input returns empty array', () => {
-    expect(getSpendingExpenses([], MK)).toHaveLength(0)
+    expect(getConsumptionExpenses([], MK)).toHaveLength(0)
   })
 })
 

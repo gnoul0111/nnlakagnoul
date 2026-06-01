@@ -4,6 +4,7 @@ import { useEffect, useCallback, useMemo } from 'react'
 import { useAppData } from './useAppData'
 import { useAuthStore } from '@/lib/store/authStore'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
+import { isConsumptionExpense, isLinkedExpense } from '@/lib/types/expense'
 
 // ─── Finance data helpers ─────────────────────────────────────────────────────
 
@@ -12,12 +13,8 @@ export function useDayFinanceData(dateStr: string) {
   const { expenses, allIncomes } = useAppData()
   return useMemo(() => {
     const dayExpenses      = expenses.filter(e => e.date === dateStr)
-    const spendingExpenses = dayExpenses.filter(
-      e => !e._debtId && !e._goalId && !e._savingsMonthKey,
-    )
-    const linkedExpenses = dayExpenses.filter(
-      e => e._debtId || e._goalId || e._savingsMonthKey,
-    )
+    const spendingExpenses = dayExpenses.filter(isConsumptionExpense)
+    const linkedExpenses = dayExpenses.filter(isLinkedExpense)
     const dayIncomes   = allIncomes.filter(i => i.date === dateStr)
     const totalSpending = spendingExpenses.reduce((s, e) => s + e.amount, 0)
     const totalIncome   = dayIncomes.reduce((s, i) => s + i.amount, 0)
@@ -35,7 +32,7 @@ export function useDailySpendingMap(monthKey: string): Record<string, number> {
     const map: Record<string, number> = {}
     for (const e of expenses) {
       if (!e.date.startsWith(monthKey)) continue
-      if (e._debtId || e._goalId || e._savingsMonthKey) continue
+      if (isLinkedExpense(e)) continue
       map[e.date] = (map[e.date] ?? 0) + e.amount
     }
     return map
@@ -47,8 +44,7 @@ export function usePeriodFinanceSummary(start: string, end: string) {
   const { expenses, allIncomes } = useAppData()
   return useMemo(() => {
     const spendingExpenses = expenses.filter(
-      e => e.date >= start && e.date <= end &&
-           !e._debtId && !e._goalId && !e._savingsMonthKey,
+      e => e.date >= start && e.date <= end && isConsumptionExpense(e),
     )
     const periodIncomes = allIncomes.filter(i => i.date >= start && i.date <= end)
     const totalSpending = spendingExpenses.reduce((s, e) => s + e.amount, 0)

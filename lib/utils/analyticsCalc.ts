@@ -6,7 +6,7 @@
  */
 
 import { toLocalDateString, parseLocalDate } from '@/lib/utils/date'
-import type { Expense } from '@/lib/types/expense'
+import { isLinkedExpense, type Expense } from '@/lib/types/expense'
 import type { Income } from '@/lib/types/income'
 
 // ─── Types (nguồn gốc duy nhất — useAnalyticsData.ts re-export lại) ───────────
@@ -31,7 +31,7 @@ export interface DailyData {
 export function buildSpendingByDate(expenses: Expense[]): Map<string, Expense[]> {
   const map = new Map<string, Expense[]>()
   for (const e of expenses) {
-    if (e.deleted || e._debtId || e._goalId || e._savingsMonthKey) continue
+    if (e.deleted || isLinkedExpense(e)) continue
     const bucket = map.get(e.date)
     if (bucket) bucket.push(e)
     else map.set(e.date, [e])
@@ -42,7 +42,7 @@ export function buildSpendingByDate(expenses: Expense[]): Map<string, Expense[]>
 export function buildSpendingByMonth(expenses: Expense[]): Map<string, Expense[]> {
   const map = new Map<string, Expense[]>()
   for (const e of expenses) {
-    if (e.deleted || e._debtId || e._goalId || e._savingsMonthKey) continue
+    if (e.deleted || isLinkedExpense(e)) continue
     const month = e.date.slice(0, 7)
     const bucket = map.get(month)
     if (bucket) bucket.push(e)

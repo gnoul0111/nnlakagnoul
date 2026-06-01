@@ -1,4 +1,4 @@
-import type { Expense } from '@/lib/types/expense'
+import { isConsumptionExpense, type Expense } from '@/lib/types/expense'
 import type { Income } from '@/lib/types/income'
 import type { Budget } from '@/lib/types/budget'
 import type { Debt } from '@/lib/types/debt'
@@ -9,17 +9,12 @@ import { getBudgetAlertLevel, type BudgetAlertLevel } from '@/lib/types/budget'
 // ─── Filter helpers ───────────────────────────────────────────────────────────
 
 /** Spending expenses: loại TẤT CẢ linked expenses — dùng cho budget */
-export function getSpendingExpenses(
+export function getConsumptionExpenses(
   expenses: Expense[],
   monthKey: string,
 ): Expense[] {
   return expenses.filter(
-    e =>
-      !e.deleted &&
-      e.date.startsWith(monthKey) &&
-      !e._debtId &&
-      !e._goalId &&
-      !e._savingsMonthKey,
+    e => !e.deleted && e.date.startsWith(monthKey) && isConsumptionExpense(e),
   )
 }
 
@@ -30,7 +25,7 @@ export function getSpendingExpenses(
  */
 export function sumSpending(expenses: Expense[], monthKey: string): number {
   return Math.round(
-    getSpendingExpenses(expenses, monthKey).reduce((sum, e) => sum + e.amount, 0),
+    getConsumptionExpenses(expenses, monthKey).reduce((sum, e) => sum + e.amount, 0),
   )
 }
 
@@ -96,7 +91,7 @@ export function calcCategorySpending(
   expenses: Expense[],
   monthKey: string,
 ): CategorySpending[] {
-  const spending = getSpendingExpenses(expenses, monthKey)
+  const spending = getConsumptionExpenses(expenses, monthKey)
   const total    = Math.round(spending.reduce((sum, e) => sum + e.amount, 0))
 
   const map = new Map<string, { amount: number; count: number }>()

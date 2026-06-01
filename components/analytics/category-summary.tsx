@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardBody } from '@/components/ui/card'
 import { MonthRangePicker } from '@/components/ui/date-picker'
 import { useAppData } from '@/hooks/useAppData'
-import { CATEGORIES } from '@/lib/types/expense'
+import { CATEGORIES, isConsumptionExpense } from '@/lib/types/expense'
 import { formatMoney, formatPercent } from '@/lib/utils/currency'
 import { thisMonth, prevMonth } from '@/lib/utils/date'
 import { cn } from '@/lib/utils/cn'
@@ -23,7 +23,7 @@ export function CategorySummary({ moneyHidden }: CategorySummaryProps) {
   // Filter expenses in range
   const rangeExpenses = expenses.filter(e =>
     !e.deleted &&
-    !e._debtId && !e._goalId && !e._savingsMonthKey &&
+    isConsumptionExpense(e) &&
     e.date.slice(0, 7) >= range.from &&
     e.date.slice(0, 7) <= range.to,
   )
