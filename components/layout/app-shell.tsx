@@ -5,7 +5,6 @@ import { Sidebar }               from './sidebar'
 import { BottomNav }             from './bottom-nav'
 import { Topbar }                from './topbar'
 import { NavigationProgress }    from '@/components/ui/navigation-progress'
-import { SafeAreaDebug }         from './safe-area-debug'
 import { cn }                    from '@/lib/utils/cn'
 
 interface AppShellProps {
@@ -42,7 +41,6 @@ export function AppShell({ children, title, topbarRight, banner, noPadding }: Ap
 
         <BottomNav />
       </div>
-      <SafeAreaDebug />
     </div>
   )
 }
