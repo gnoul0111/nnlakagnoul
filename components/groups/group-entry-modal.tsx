@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { FormField, Input } from '@/components/ui/input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { AmountInput } from '@/components/ui/amount-input'
+import { ReceiptScanner } from '@/components/ai/ReceiptScanner'
+import type { ScanResult } from '@/hooks/useReceiptScan'
 import { useToast } from '@/hooks/useToast'
 import {
   addGroupEntry, updateGroupEntry,
@@ -93,6 +95,15 @@ export function GroupEntryModal({ open, onClose, group, currentUid, edit, onSave
     setParts(prev => prev.includes(uid) ? prev.filter(u => u !== uid) : [...prev, uid])
   }
 
+  // Nhận kết quả scan hóa đơn → điền tổng tiền + ngày + ghi chú.
+  // (Khoản nhóm không có danh mục nên bỏ qua result.category.)
+  const handleScan = useCallback((r: ScanResult) => {
+    if (r.amount !== null) setTotalRaw(String(r.amount))
+    if (r.date)            setDate(r.date)
+    const desc = r.title || r.note
+    if (desc)              setNote(desc)
+  }, [])
+
   const handleSave = async () => {
     if (!valid || busy) return
     setBusy(true)
@@ -124,6 +135,9 @@ export function GroupEntryModal({ open, onClose, group, currentUid, edit, onSave
   return (
     <Modal variant="center" open={open} onClose={onClose} title={edit ? 'Sửa khoản chung' : 'Thêm khoản chung'} className="max-w-lg">
       <div className="px-4 pb-6 space-y-4">
+        {/* AI scan hóa đơn — chỉ khi thêm mới (ẩn lúc sửa để khỏi ghi đè) */}
+        {!edit && <ReceiptScanner onResult={handleScan} disabled={busy} />}
+
         {/* Người trả */}
         <FormField label="Người trả" required>
           <div className="flex flex-wrap gap-2">
