@@ -103,11 +103,22 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* position: fixed + inset: 0 = body bi chot cung vao viewport.
-       Day la cach DUY NHAT chong iOS rubber-band/overscroll tren PWA.
-       overscroll-behavior: none khong co tac dung tren iOS Safari/PWA. */
+    /* position: fixed = body bi chot cung vao viewport → chong iOS rubber-band/overscroll
+       (overscroll-behavior: none khong co tac dung tren iOS Safari/PWA).
+
+       FIX dai den o day man hinh tren iOS PWA:
+       Truoc dung `inset: 0` → tren iOS PWA, `bottom: 0` bi chot vao mep safe-area
+       (khong phai mep man hinh that) → body khong phu het xuong day → lo nen den
+       (theme-color) o vung home-indicator.
+       Nay: pin top + dung `height: 100dvh` (dynamic viewport, iOS 16+ tinh dung full
+       man) → body phu dung toan man, nav cham day that, pb-safe cua nav lap not
+       vung home-indicator bang mau nav. */
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100%;     /* fallback cho browser cu khong ho tro dvh */
+    height: 100dvh;
     overflow: hidden;
   }
 
@@ -148,6 +159,7 @@
      vi body da fixed roi. */
   .app-shell {
     height: 100%;
+    height: 100dvh;
   }
 }
 
