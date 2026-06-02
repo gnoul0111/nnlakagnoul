@@ -143,11 +143,13 @@
   }
 
   /* iOS PWA height fix:
-     Body la position:fixed + inset:0 → height = 100% se fill dung viewport.
-     Khong dung 100vh vi iOS PWA tinh sai, khong dung -webkit-fill-available
-     vi body da fixed roi. */
+     `height: 100%` KHONG resolve ra full man tren iOS PWA (body fixed inset:0
+     khong cho % con chieu cao xac dinh on dinh) → app-shell co theo noi dung →
+     bottom-nav khong cham day → ho dai den (nen toi) o vung home-indicator.
+     Man Login dung min-h-screen (100vh) phu kin → 100vh la chuan tren PWA nay.
+     (Da thu 100dvh → iOS PWA tinh NGAN; chi 100vh moi dung — KHONG dung dvh.) */
   .app-shell {
-    height: 100%;
+    height: 100vh;
   }
 }
 
