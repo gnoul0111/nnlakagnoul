@@ -37,7 +37,8 @@ const FIREBASE_ERROR_MAP: Record<string, string> = {
 }
 
 const googleProvider = new GoogleAuthProvider()
-googleProvider.setCustomParameters({ prompt: 'select_account' })
+// Khong set prompt: 'select_account' → Google tu dang nhap thang bang tai khoan
+// dang dung (nhanh hon 1 buoc). Neu co nhieu tai khoan, Google van hien chon.
 
 export interface GoogleSignInResult {
   user:    User
