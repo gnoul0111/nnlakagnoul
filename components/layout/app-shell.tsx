@@ -33,6 +33,9 @@ export function AppShell({ children, title, topbarRight, banner, noPadding }: Ap
         <main className={cn(
           'flex-1 overflow-y-auto overflow-x-hidden overscroll-contain min-w-0',
           !noPadding && 'p-3 sm:p-4 lg:p-6',
+          // BottomNav giờ là fixed (mobile) → chừa chỗ để nội dung cuối không bị che.
+          // h-16 (4rem) + safe-area. Desktop (lg) không có bottom nav nên bỏ.
+          'max-lg:pb-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)]',
         )}>
           <div key={pathname} className="h-full">
             {children}
