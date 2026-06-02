@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   manifest:    '/manifest.json',
   icons:       { icon: '/icons/favicon.png' },
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Chi Tiêu' },
+  // Next chỉ emit `mobile-web-app-capable` (kiểu mới). iOS cần meta apple-prefix
+  // tường minh để cho viewport fullscreen edge-to-edge (debug: innerHeight 768 <
+  // screen 812 = chưa fullscreen). Thêm thủ công:
+  other: { 'apple-mobile-web-app-capable': 'yes' },
 }
 
 export const viewport: Viewport = {
