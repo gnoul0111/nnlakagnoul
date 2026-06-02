@@ -45,9 +45,7 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className={cn('flex items-center gap-3 px-4 h-14 border-b border-border shrink-0', collapsed && 'justify-center px-0')}>
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground text-base font-bold shrink-0">
-          💰
-        </div>
+        <img src="/icons/icon-192x192.png" alt="Chi Tiêu" className="w-8 h-8 shrink-0" />
         {!collapsed && (
           <span className="font-bold text-base text-foreground truncate">Chi Tiêu</span>
         )}

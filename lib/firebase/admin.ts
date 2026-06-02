@@ -31,3 +31,9 @@ export function getAdminApp(): admin.app.App {
 export function getAdminAuth(): admin.auth.Auth {
   return admin.auth(getAdminApp())
 }
+
+export function getAdminDb(): admin.firestore.Firestore {
+  return admin.firestore(getAdminApp())
+}
+
+export { admin }

@@ -24,6 +24,9 @@ import { db } from './config'
 export const COLLECTIONS = {
   EXPENSE_EVENTS: 'expense_events',
   EXPENSE_SNAPSHOTS: 'expense_snapshots',
+  // Module chi tiêu chung / nhóm gia đình (multi-user)
+  GROUPS:         'groups',
+  GROUP_EVENTS:   'group_events',
   BUDGETS:        'budgets',
   USERS:          'users',
   USER_SETTINGS:  'user_settings',

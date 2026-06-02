@@ -3,6 +3,7 @@ import {
   Wallet,
   BarChart2,
   CalendarDays,
+  Users,
   Settings,
   type LucideIcon,
 } from 'lucide-react'
@@ -17,6 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Tổng quan',  href: '/',          icon: LayoutDashboard },
   { label: 'Tài chính',  href: '/finance',    icon: Wallet          },
   { label: 'Phân tích',  href: '/analytics',  icon: BarChart2       },
+  { label: 'Nhóm',       href: '/groups',     icon: Users           },
   { label: 'Lịch',       href: '/calendar',   icon: CalendarDays    },
   { label: 'Cài đặt',    href: '/settings',   icon: Settings        },
 ]

@@ -15,6 +15,9 @@ export interface AddDebtInput {
   date?: string     // YYYY-MM-DD — ngày phát sinh khoản nợ/vay
   dueDate?: string  // YYYY-MM-DD
   note?: string
+  // Liên kết module nhóm (khi kéo "Ghi nợ" từ khoản chung)
+  _groupId?: string | null
+  _groupEntryId?: string | null
 }
 
 export async function addDebt(userId: string, input: AddDebtInput): Promise<string> {
@@ -37,6 +40,8 @@ export async function addDebt(userId: string, input: AddDebtInput): Promise<stri
       payments: [],
       deleted: false,
       createdAt: Math.floor(Date.now() / 1000),
+      _groupId:      input._groupId      ?? null,
+      _groupEntryId: input._groupEntryId ?? null,
     },
   })
 

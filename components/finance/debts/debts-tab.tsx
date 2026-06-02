@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Pencil, Trash2, PlusCircle } from 'lucide-react'
+import { Plus, Pencil, Trash2, PlusCircle, Lock } from 'lucide-react'
 import { Modal, ConfirmModal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { FormField, Input } from '@/components/ui/input'
@@ -24,7 +24,7 @@ import {
   findLinkedExpenseIds, findPaymentLinkedExpense,
 } from '@/lib/services/debtService'
 import { newDebtId, newPaymentId } from '@/lib/utils/id'
-import { computePaidAmount, computeRemaining, isDebtSettled, isDebtOverdue, isDebtUpcoming } from '@/lib/types/debt'
+import { computePaidAmount, computeRemaining, isDebtSettled, isDebtOverdue, isDebtUpcoming, isGroupLinkedDebt } from '@/lib/types/debt'
 import type { Debt, DebtPayment } from '@/lib/types/debt'
 import { parseAmount, formatMoney, formatPercent } from '@/lib/utils/currency'
 import { today, formatDateVN } from '@/lib/utils/date'
@@ -217,6 +217,11 @@ export function DebtsTab() {
 
   const handleDeleteDebt = async (choice: string) => {
     if (!user || !deleteDebtTarget) return
+    if (isGroupLinkedDebt(deleteDebtTarget)) {
+      toast.warning('Khoản nợ từ nhóm — hãy "Hoàn tác" ở tab Nhóm.')
+      setDeleteDebtTarget(null)
+      return
+    }
     try {
       const linkedIds = findLinkedExpenseIds(deleteDebtTarget.id, expenses)
       await deleteDebt(user.uid, deleteDebtTarget.id, {
@@ -257,6 +262,7 @@ export function DebtsTab() {
           const overdue   = isDebtOverdue(debt, todayStr)
           const upcoming  = isDebtUpcoming(debt, todayStr)
           const settled   = remaining <= 0
+          const groupLinked = isGroupLinkedDebt(debt)
           const meta = [
             debt.date    ? `Ngày ${formatDateVN(debt.date)}`      : null,
             debt.dueDate ? `Đến hạn ${formatDateVN(debt.dueDate)}` : null,
@@ -272,16 +278,26 @@ export function DebtsTab() {
                       {settled  && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-success/10 text-success">Xong</span>}
                       {overdue  && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">Quá hạn</span>}
                       {upcoming && !overdue && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-warning/10 text-warning">Sắp đến hạn</span>}
+                      {groupLinked && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-warning/10 text-warning">Nhóm</span>}
                     </div>
                     {meta && <p className="text-xs text-muted-foreground mt-0.5">{meta}</p>}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 ml-2">
-                    <button onClick={() => openDebtEdit(debt)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors">
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => setDeleteDebtTarget(debt)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {groupLinked ? (
+                      <span className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50"
+                        title='Khoản nợ từ nhóm — gỡ bằng "Hoàn tác" ở tab Nhóm'>
+                        <Lock className="w-3.5 h-3.5" />
+                      </span>
+                    ) : (
+                      <>
+                        <button onClick={() => openDebtEdit(debt)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setDeleteDebtTarget(debt)} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <Progress value={pct} level={settled ? 'ok' : overdue ? 'over' : 'ok'} />

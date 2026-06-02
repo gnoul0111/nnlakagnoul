@@ -25,8 +25,18 @@ export interface Debt {
   deleted: boolean
   createdAt: number     // Unix seconds
 
+  // Khoản nợ phát sinh từ "kéo về sổ" của module nhóm → KHÔNG cho xóa tay
+  // (chỉ gỡ qua "Hoàn tác" bên nhóm) để tránh lệch dữ liệu.
+  _groupId?: string | null
+  _groupEntryId?: string | null
+
   _deletedClientTimestamp?: string
   _updatedClientTimestamp?: string
+}
+
+/** Khoản nợ này phát sinh từ module nhóm (kéo về sổ) → khóa xóa tay. */
+export function isGroupLinkedDebt(debt: Pick<Debt, '_groupEntryId'>): boolean {
+  return !!debt._groupEntryId
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

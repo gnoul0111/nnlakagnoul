@@ -1,5 +1,3 @@
-import { cn } from '@/lib/utils/cn'
-
 interface AuthLayoutProps {
   children: React.ReactNode
   title: string
@@ -11,12 +9,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
     <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4 py-12">
       {/* Logo + App name */}
       <div className="flex flex-col items-center gap-2 mb-8">
-        <div className={cn(
-          'w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-md',
-          'bg-primary text-primary-foreground',
-        )}>
-          💰
-        </div>
+        <img src="/icons/icon-192x192.png" alt="Chi Tiêu" className="w-14 h-14 shadow-md rounded-2xl" />
         <span className="text-xl font-bold text-foreground tracking-tight">Chi Tiêu</span>
       </div>
 

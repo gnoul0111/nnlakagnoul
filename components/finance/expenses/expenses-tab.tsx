@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Plus, Pencil, Trash2, Copy } from 'lucide-react'
+import { Plus, Pencil, Trash2, Copy, Lock } from 'lucide-react'
 import { Button }           from '@/components/ui/button'
 import { ConfirmModal }     from '@/components/ui/modal'
 import { DateRangePicker }  from '@/components/ui/date-picker'
@@ -69,6 +69,11 @@ export function ExpensesTab() {
       setDeleteTarget(null)
       return
     }
+    if (deleteTarget._groupEntryId) {
+      toast.warning('Khoản từ nhóm — hãy "Hoàn tác" ở tab Nhóm.')
+      setDeleteTarget(null)
+      return
+    }
     setIsDeleting(true)  // FIX: disable nút ngay lập tức
     try {
       await append(EVENT_TYPES.EXPENSE_DELETED, {
@@ -130,9 +135,10 @@ export function ExpensesTab() {
                 </span>
               </div>
               {expenses.map((expense, i) => {
-                const cat       = catMap[expense.category] ?? catMap.other
-                const isLinked  = isLinkedExpense(expense)
-                const isSavings = isSavingsExpense(expense)
+                const cat         = catMap[expense.category] ?? catMap.other
+                const isLinked    = isLinkedExpense(expense)
+                const isSavings   = isSavingsExpense(expense)
+                const isGroupLinked = !!expense._groupEntryId
                 return (
                   <div key={expense.id}
                     className={cn('flex items-center gap-3 px-4 py-3',
@@ -151,6 +157,11 @@ export function ExpensesTab() {
                             {expense._debtId ? 'Nợ' : expense._goalId ? 'Mục tiêu' : 'Tiết kiệm'}
                           </span>
                         )}
+                        {isGroupLinked && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-warning/10 text-warning leading-none">
+                            Nhóm
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -158,7 +169,21 @@ export function ExpensesTab() {
                       <span className={cn('text-sm font-semibold text-destructive mr-1')}>
                         {formatMoney(expense.amount, moneyHidden)}
                       </span>
-                      {!isSavings ? (
+                      {isSavings ? (
+                        <div className="w-[60px] shrink-0" />
+                      ) : isGroupLinked ? (
+                        <>
+                          <button onClick={() => { setEditTarget(expense); setFormOpen(true) }}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                            aria-label="Sửa">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50"
+                            title='Khoản từ nhóm — gỡ bằng "Hoàn tác" ở tab Nhóm'>
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
+                        </>
+                      ) : (
                         <>
                           <button onClick={() => { setCopyTarget(expense); setFormOpen(true) }}
                             className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -176,8 +201,6 @@ export function ExpensesTab() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </>
-                      ) : (
-                        <div className="w-[60px] shrink-0" />
                       )}
                     </div>
                   </div>

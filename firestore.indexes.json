@@ -23,6 +23,15 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "date",   "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "group_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "groupId",      "order": "ASCENDING" },
+        { "fieldPath": "participants", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "timestamp",    "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

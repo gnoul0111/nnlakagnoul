@@ -38,6 +38,15 @@ export interface Expense {
   _savingsMonthKey?: string | null
   _savingsDepositId?: string | null
 
+  // Module chi tiêu chung: khoản này được "kéo" từ một khoản chung trong nhóm.
+  // CHỈ là metadata liên kết — KHÔNG đổi hành vi tiêu dùng/ngân sách (vẫn là chi
+  // tiêu thật của user). Dùng để: suy ra trạng thái box (Đã kéo) + đối soát khi
+  // khoản gốc đổi. Xem DESIGN_NOTES "Module CHI TIÊU CHUNG".
+  _groupId?: string | null
+  _groupEntryId?: string | null
+  _groupShareSnapshot?: number | null   // share tại thời điểm kéo (để phát hiện lệch)
+  _groupEntryVersion?: string | null    // version khoản gốc lúc kéo (clientTimestamp)
+
   // Soft delete
   deleted?: boolean
   deletedAt?: string
