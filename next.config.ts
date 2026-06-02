@@ -14,10 +14,10 @@ const IS_PROD = process.env.NODE_ENV === 'production'
 // Sau khi xác nhận không có false positive → chuyển sang Content-Security-Policy
 const cspDirectives = [
   "default-src 'self'",
-  // Firebase SDK + Firestore + Auth + FCM
-  "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://fcm.googleapis.com",
-  // Scripts: 'self' + reCAPTCHA Enterprise + Firebase Dynamic Links
-  "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com",
+  // Firebase SDK + Firestore + Auth + FCM + reCAPTCHA Enterprise (www.google.com)
+  "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://fcm.googleapis.com https://www.google.com https://apis.google.com",
+  // Scripts: 'self' + reCAPTCHA + gapi (apis.google.com — Firebase Auth iframe loader)
+  "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://apis.google.com",
   // Styles: 'self' + inline (Next.js inject inline styles)
   "style-src 'self' 'unsafe-inline'",
   // Fonts

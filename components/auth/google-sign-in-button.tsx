@@ -23,12 +23,12 @@ export function GoogleSignInButton({ label = 'Tiếp tục với Google' }: Prop
 
   const handleClick = async () => {
     setLoading(true)
-    const dev = process.env.NODE_ENV !== 'production'
-    const t0  = performance.now()
+    // TODO(tam thoi): log de do thoi gian dang nhap tren production. Go sau khi xong.
+    const t0 = performance.now()
     try {
       const { user, isNewUser } = await signInWithGoogle()
       const t1 = performance.now()
-      if (dev) console.log(`[signin] popup OAuth: ${Math.round(t1 - t0)}ms (isNewUser=${isNewUser})`)
+      console.log(`[signin] popup OAuth: ${Math.round(t1 - t0)}ms (isNewUser=${isNewUser})`)
 
       // Lần đầu đăng nhập bằng Google → tạo profile trong Firestore
       if (isNewUser) {
@@ -38,10 +38,10 @@ export function GoogleSignInButton({ label = 'Tiếp tục với Google' }: Prop
           displayName: user.displayName ?? 'Người dùng',
           photoURL:    user.photoURL ?? null,
         })
-        if (dev) console.log(`[signin] upsert profile: ${Math.round(performance.now() - t1)}ms`)
+        console.log(`[signin] upsert profile: ${Math.round(performance.now() - t1)}ms`)
       }
 
-      if (dev) console.log(`[signin] total truoc khi redirect: ${Math.round(performance.now() - t0)}ms`)
+      console.log(`[signin] total truoc khi redirect: ${Math.round(performance.now() - t0)}ms`)
       toast.success(isNewUser ? 'Chào mừng bạn đến với Chi Tiêu!' : 'Đăng nhập thành công!')
       router.replace('/')
     } catch (err) {
