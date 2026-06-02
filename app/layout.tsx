@@ -11,7 +11,9 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor:   '#0a0a0a',
+  // Khop mau thanh nav (bg-card dark = hsl 0 0% 11% = #1c1c1c) → vung
+  // home-indicator iOS (iOS to bang theme-color) lien mach voi nav, het khoang den.
+  themeColor:   '#1c1c1c',
   width:        'device-width',
   initialScale: 1,
   viewportFit:  'cover',
@@ -48,6 +50,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         {/* Script nay PHAI la the dau tien trong <head>, chay truoc moi thu */}
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+
+        {/* PERF: warm up ket noi toi cac origin cua Google/Firebase Auth.
+            Giam latency cho lan dang nhap Google dau tien (popup + token exchange). */}
+        <link rel="preconnect" href="https://apis.google.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://www.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://www.google.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://securetoken.googleapis.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://firestore.googleapis.com" crossOrigin="anonymous" />
+        {process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN && (
+          <link rel="preconnect" href={`https://${process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}`} crossOrigin="anonymous" />
+        )}
       </head>
       <body>
         <Providers>

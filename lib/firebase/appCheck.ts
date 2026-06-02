@@ -23,7 +23,7 @@
  *   - KHÔNG commit debug token vào git
  */
 
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check'
+import { initializeAppCheck, getToken, ReCaptchaEnterpriseProvider, type AppCheck } from 'firebase/app-check'
 // FIX circular import:
 // Trước: import { app } from './config'  ← config.ts cũng import từ appCheck.ts
 //        → circular dependency → app = undefined khi initAppCheck() chạy
@@ -33,6 +33,7 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-ch
 import { getApp } from 'firebase/app'
 
 let appCheckInitialized = false
+let appCheckInstance: AppCheck | null = null
 
 export function initAppCheck(): void {
   // Chỉ chạy ở browser, chỉ khởi tạo 1 lần
@@ -60,7 +61,7 @@ export function initAppCheck(): void {
   }
 
   try {
-    initializeAppCheck(getApp(), {
+    appCheckInstance = initializeAppCheck(getApp(), {
       provider: new ReCaptchaEnterpriseProvider(siteKey),
       isTokenAutoRefreshEnabled: true,
     })
@@ -71,4 +72,21 @@ export function initAppCheck(): void {
   } catch (err) {
     console.error('[AppCheck] Initialization failed:', err)
   }
+}
+
+/**
+ * PERF: làm nóng App Check sớm (gọi ở trang đăng nhập).
+ *
+ * Token reCAPTCHA Enterprise đầu tiên tốn ~1–3s vì phải load enterprise.js
+ * + chạy risk assessment. Nếu chờ tới lúc request Firestore đầu tiên (sau khi
+ * đăng nhập) mới fetch → user thấy "load lâu". Gọi hàm này khi trang login mount
+ * để token được lấy SONG SONG trong lúc user thao tác popup OAuth (vốn mất vài
+ * giây) → tới khi đăng nhập xong, token đã sẵn sàng → data load tức thì.
+ */
+export function warmUpAppCheck(): void {
+  if (typeof window === 'undefined') return
+  initAppCheck()
+  if (!appCheckInstance) return
+  // Fire-and-forget: ép fetch token ngay, không chờ tới request đầu tiên.
+  getToken(appCheckInstance).catch(() => { /* sẽ thử lại khi có request thật */ })
 }
