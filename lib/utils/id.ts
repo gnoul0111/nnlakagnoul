@@ -26,5 +26,19 @@ export const newPaymentId  = () => generateId('pay')
 export const newWithdrawId = () => generateId('wd')
 export const newAllocId    = () => generateId('alloc')
 export const newEventId    = () => generateId('evt')
-export const newGroupId      = () => generateId('grp')
+
+// ─── Short ID (cho group — xuất hiện trên URL nên cần gọn) ──────────────────────
+// 12 ký tự từ alphabet 62 → ~62^12 tổ hợp, chống trùng dư sức cho app gia đình.
+// URL: /groups/grp_aB3kZ9xQ2mPq (ngắn hơn nhiều so với UUID đầy đủ).
+const SHORT_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+
+function shortId(len: number): string {
+  const arr = new Uint32Array(len)
+  crypto.getRandomValues(arr)
+  let s = ''
+  for (let i = 0; i < len; i++) s += SHORT_ID_ALPHABET[arr[i] % SHORT_ID_ALPHABET.length]
+  return s
+}
+
+export const newGroupId      = () => `grp_${shortId(12)}`
 export const newGroupEntryId = () => generateId('gent')
