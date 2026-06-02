@@ -5,6 +5,7 @@ import { Sidebar }               from './sidebar'
 import { BottomNav }             from './bottom-nav'
 import { Topbar }                from './topbar'
 import { NavigationProgress }    from '@/components/ui/navigation-progress'
+import { SafeAreaDebug }         from './safe-area-debug'
 import { cn }                    from '@/lib/utils/cn'
 
 interface AppShellProps {
@@ -33,9 +34,6 @@ export function AppShell({ children, title, topbarRight, banner, noPadding }: Ap
         <main className={cn(
           'flex-1 overflow-y-auto overflow-x-hidden overscroll-contain min-w-0',
           !noPadding && 'p-3 sm:p-4 lg:p-6',
-          // BottomNav là fixed (mobile) → chừa chỗ cho nội dung cuối khỏi bị che
-          // (cao nav h-16 = 4rem + safe-area). Desktop (lg) không có bottom nav.
-          'max-lg:pb-[calc(4rem+env(safe-area-inset-bottom))]',
         )}>
           <div key={pathname} className="h-full">
             {children}
@@ -44,6 +42,7 @@ export function AppShell({ children, title, topbarRight, banner, noPadding }: Ap
 
         <BottomNav />
       </div>
+      <SafeAreaDebug />
     </div>
   )
 }
