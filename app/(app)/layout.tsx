@@ -16,6 +16,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/':          'Tổng quan',
   '/finance':   'Tài chính',
   '/analytics': 'Phân tích',
+  '/groups':    'Nhóm',
   '/calendar':  'Lịch',
   '/settings':  'Cài đặt',
 }
@@ -36,7 +37,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!isInitialized) return <PageSpinner />
   if (!user) return null
 
-  const title = PAGE_TITLES[pathname] ?? 'Chi Tiêu'
+  // Khớp chính xác trước; nếu không, khớp theo prefix (vd /groups/abc → "Nhóm")
+  const title = PAGE_TITLES[pathname]
+    ?? Object.entries(PAGE_TITLES).find(([href]) => href !== '/' && pathname.startsWith(href))?.[1]
+    ?? 'Chi Tiêu'
 
   return (
     <>

@@ -64,6 +64,37 @@ service cloud.firestore {
       return hasRequired && validTypes && validEventType && validAmount && validSize;
     }
 
+    // ─── Module nhóm (chi tiêu chung) ──────────────────────────────────────
+    //
+    // request.auth.uid là thành viên của group {groupId}?
+    // Dùng get() → tốn 1 read/lần write. Chỉ áp cho CREATE event (ít hơn read).
+    // READ event KHÔNG get() — gate bằng `uid in resource.data.participants`.
+    function isGroupMember(groupId) {
+      return authed()
+        && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberUids;
+    }
+
+    // Validate event nhóm trước khi ghi vào group_events
+    function validGroupEvent() {
+      let d = request.resource.data;
+      let hasRequired = d.keys().hasAll(['groupId', 'actorUid', 'participants', 'eventType', 'data', 'createdAt']);
+      let validTypes = d.groupId is string
+        && d.actorUid is string
+        && d.participants is list
+        && d.eventType is string
+        && d.data is map
+        && d.createdAt is string;
+      let validEventType = d.eventType in ['GROUP_ENTRY_ADDED', 'GROUP_ENTRY_UPDATED', 'GROUP_ENTRY_DELETED', 'GROUP_ENTRY_STATUS_SET'];
+      // total (nếu có) phải dương, không overflow
+      let validTotal = !('total' in d.data)
+        || (d.data.total is number && d.data.total >= 0 && d.data.total < 1000000000);
+      let validSize = d.data.size() <= 30 && d.participants.size() <= 50;
+      // STATUS_SET: chỉ được set trạng thái CỦA CHÍNH MÌNH + giá trị hợp lệ.
+      let validStatus = d.eventType != 'GROUP_ENTRY_STATUS_SET'
+        || (d.data.uid == request.auth.uid && d.data.status in ['pending', 'done', 'skipped']);
+      return hasRequired && validTypes && validEventType && validTotal && validSize && validStatus;
+    }
+
 
     // ═══════════════════════════════════════════════════════════════════════
     // EXPENSE_EVENTS — append-only event log (event-sourcing)
@@ -207,6 +238,56 @@ service cloud.firestore {
     //    Rules cũ có match /cal_events/ nhưng code không dùng collection này.
     //    Xóa rule không dùng để tránh attack surface dư thừa.
     //    (Nếu sau này cần thêm lại thì uncomment và review kỹ)
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GROUPS — danh bạ thành viên + mã mời (chi tiêu chung, MULTI-USER)
+    // ═══════════════════════════════════════════════════════════════════════
+    //
+    // Đây là dữ liệu dùng chung ĐẦU TIÊN (khác mô hình isMe). Đọc kỹ:
+    //  • Đọc nhóm: phải là thành viên (uid ∈ memberUids).
+    //  • Tạo nhóm: người tạo là owner DUY NHẤT và là thành viên đầu tiên duy nhất.
+    //  • THAM GIA (đổi memberUids): làm qua API route admin SDK (bypass rules).
+    //    Client KHÔNG được tự thêm mình vào nhóm → tránh IDOR qua mã đoán.
+    //  • Client update chỉ cho owner sửa field thường, KHÓA memberUids + ownerUid.
+    match /groups/{groupId} {
+      allow get:  if authed() && request.auth.uid in resource.data.memberUids;
+      allow list: if authed() && request.auth.uid in resource.data.memberUids;
+      allow create: if authed()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberUids == [request.auth.uid];
+      allow update: if authed()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.memberUids == resource.data.memberUids;
+      allow delete: if authed() && resource.data.ownerUid == request.auth.uid;
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // GROUP_EVENTS — append-only sổ chung (event-sourcing), quyền theo KHOẢN
+    // ═══════════════════════════════════════════════════════════════════════
+    //
+    //  • Đọc: CHỈ người trong khoản (uid ∈ participants). Field ngay trên doc
+    //    → KHÔNG cần get() → đọc nhanh. Người ngoài không thấy khoản tồn tại.
+    //  • Tạo: actor phải là chính mình, phải nằm trong participants, và phải là
+    //    THÀNH VIÊN nhóm (get() — chỉ tốn read lúc write). Validate payload.
+    //  • Immutable: sửa/xóa khoản = append event mới (không update/delete doc).
+    //
+    //  ⚠️ Known-limit (Pha 1): rules CHƯA ép "chỉ người tạo được sửa" và "mọi
+    //  participant phải là member" (cần get() tốn kém / đọc event gốc). Ép tạm ở
+    //  UI/service. App gia đình tin nhau → chấp nhận. TODO siết sau nếu cần.
+    match /group_events/{docId} {
+      allow get:  if authed() && request.auth.uid in resource.data.participants;
+      allow list: if authed() && request.auth.uid in resource.data.participants;
+      allow create: if authed()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.auth.uid in request.resource.data.participants
+        && isGroupMember(request.resource.data.groupId)
+        && validGroupEvent();
+      allow update: if false;
+      allow delete: if false;
+    }
 
   }
 }

@@ -19,6 +19,11 @@ export interface AddExpenseInput {
   _depositId?: string | null
   _savingsMonthKey?: string | null
   _savingsDepositId?: string | null
+  // Module chi tiêu chung — liên kết khoản kéo từ nhóm
+  _groupId?: string | null
+  _groupEntryId?: string | null
+  _groupShareSnapshot?: number | null
+  _groupEntryVersion?: string | null
 }
 
 export interface UpdateExpenseInput {
@@ -27,6 +32,9 @@ export interface UpdateExpenseInput {
   category?: CategoryValue
   date?: string
   note?: string
+  // Cho phép đối soát cập nhật lại snapshot/version khi khoản gốc đổi
+  _groupShareSnapshot?: number | null
+  _groupEntryVersion?: string | null
 }
 
 // ─── Service functions ────────────────────────────────────────────────────────
@@ -60,6 +68,10 @@ export async function addExpense(
       _depositId:       input._depositId        ?? null,
       _savingsMonthKey: input._savingsMonthKey  ?? null,
       _savingsDepositId: input._savingsDepositId ?? null,
+      _groupId:            input._groupId            ?? null,
+      _groupEntryId:       input._groupEntryId       ?? null,
+      _groupShareSnapshot: input._groupShareSnapshot ?? null,
+      _groupEntryVersion:  input._groupEntryVersion  ?? null,
     },
   })
 
