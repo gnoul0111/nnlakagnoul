@@ -142,14 +142,16 @@
     padding-top: env(safe-area-inset-top);
   }
 
-  /* iOS PWA height fix:
-     `height: 100%` KHONG resolve ra full man tren iOS PWA (body fixed inset:0
-     khong cho % con chieu cao xac dinh on dinh) → app-shell co theo noi dung →
-     bottom-nav khong cham day → ho dai den (nen toi) o vung home-indicator.
-     Man Login dung min-h-screen (100vh) phu kin → 100vh la chuan tren PWA nay.
-     (Da thu 100dvh → iOS PWA tinh NGAN; chi 100vh moi dung — KHONG dung dvh.) */
+  /* iOS PWA full-height fix (da do bang debug):
+     SAB(safe-area-inset-bottom)=34px OK, nhung innerHeight/100vh=768 < screen=812
+     → `height: 100vh` (va ca `height:100%`) cho app-shell NGAN hon man that ~44px
+     → bottom-nav khong cham day → ho nen o vung home-indicator.
+     Body la `position: fixed; inset: 0` → PHU DUNG full man that (man Login chung minh).
+     → Cho app-shell `position: absolute; inset: 0` de phu DUNG BANG body (full man),
+     khong phu thuoc vh/% (vốn bi iOS PWA tinh sai). nav cham day → pb-safe lap home zone. */
   .app-shell {
-    height: 100vh;
+    position: absolute;
+    inset: 0;
   }
 }
 
