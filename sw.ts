@@ -1,12 +1,15 @@
 import { defaultCache }                              from '@serwist/next/worker'
-import { Serwist, NetworkFirst, NetworkOnly, CacheFirst, ExpirationPlugin } from 'serwist'
+import { Serwist, NetworkFirst, CacheFirst, ExpirationPlugin } from 'serwist'
 import type { PrecacheEntry, SerwistGlobalConfig }  from 'serwist'
 
-// FIX AUTH-HANG: Service worker KHÔNG được intercept request đăng nhập của Firebase.
-// Trieu chung khi vi pham: lan dau mo app, signInWithPopup treo mai, popup khong
-// hien — phai tat app mo lai moi duoc (do skipWaiting+clientsClaim gianh quyen
-// dieu khien trang giua chung -> gian doan luong auth dang khoi tao).
-// Cac origin nay phai luon di thang ra network (NetworkOnly), khong cache, khong cham.
+// FIX AUTH-HANG: Service worker KHÔNG được đụng vào request đăng nhập của Firebase.
+// Trieu chung khi vi pham: signInWithPopup fail / treo, console bao
+// "FetchEvent for identitytoolkit.googleapis.com... resulted in a network error"
+// (sw.js) — do SW fetch lai request auth cross-origin lam no ERR_FAILED.
+//
+// NetworkOnly KHONG du: no van fetch lai qua SW -> van hong. Phai BO QUA HOAN
+// TOAN: bat fetch event som, goi stopImmediatePropagation() de Serwist khong
+// xu ly -> khong respondWith -> browser tu fetch native (cach duy nhat chay dung).
 const AUTH_PASSTHROUGH = /^https:\/\/(apis\.google\.com|accounts\.google\.com|www\.google\.com|[^/]+\.firebaseapp\.com|identitytoolkit\.googleapis\.com|securetoken\.googleapis\.com)\//i
 
 declare global {
@@ -24,12 +27,6 @@ const serwist = new Serwist({
   clientsClaim:      true,
   navigationPreload: false,
   runtimeCaching: [
-    // PHẢI đặt đầu tiên: request auth của Firebase/Google đi thẳng ra network,
-    // SW không bao giờ intercept (xem AUTH_PASSTHROUGH ở trên).
-    {
-      matcher: ({ url }: { url: URL }) => AUTH_PASSTHROUGH.test(url.href),
-      handler: new NetworkOnly(),
-    },
     // Firebase Firestore
     {
       matcher: /^https:\/\/firestore\.googleapis\.com\/.*/i,
@@ -109,6 +106,15 @@ const serwist = new Serwist({
     // Phần còn lại dùng default Next.js strategy
     ...defaultCache,
   ],
+})
+
+// PHẢI đăng ký TRƯỚC serwist.addEventListeners(): với request auth của Firebase,
+// gọi stopImmediatePropagation() → listener fetch của Serwist (đăng ký sau) không
+// chạy → không respondWith → trình duyệt tự fetch native (auth chạy đúng).
+self.addEventListener('fetch', (event: FetchEvent) => {
+  if (AUTH_PASSTHROUGH.test(event.request.url)) {
+    event.stopImmediatePropagation()
+  }
 })
 
 serwist.addEventListeners()

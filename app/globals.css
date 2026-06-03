@@ -99,7 +99,10 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    /* bg-card thay vi bg-background: body background PHAI khop mau nav (bg-card)
+       de vung home-indicator zone hoa mau voi nav, khong lo nen lech mau. */
+    background-color: hsl(var(--card));
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
