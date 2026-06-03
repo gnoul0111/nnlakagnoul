@@ -13,16 +13,13 @@ interface Props {
   label?: string
 }
 
-// Ngưỡng coi popup là "treo" → chuyển redirect. Đặt đủ dài (8s) để popup chậm
-// nhưng vẫn chạy được (vd InPrivate) kịp hoàn tất, tránh fallback nhầm sang
-// redirect (redirect dễ lặp vô hạn trong InPrivate/Safari do storage partitioning).
-const POPUP_TIMEOUT_MS = 8000
-
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('popup-timeout')), ms)),
-  ])
+// App đã cài chạy toàn màn hình (standalone). Popup hay bị chặn trong PWA →
+// dùng redirect thẳng (Firebase khuyến nghị). PWA cài đặt không dính lỗi storage
+// partitioning như InPrivate nên redirect chạy ổn.
+function isStandalonePWA(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia?.('(display-mode: standalone)').matches === true
+    || (window.navigator as { standalone?: boolean }).standalone === true // iOS Safari
 }
 
 // Tạo/cập nhật profile Firestore lần đầu đăng nhập (idempotent — gọi lại an toàn).
@@ -58,10 +55,25 @@ export function GoogleSignInButton({ label = 'Tiếp tục với Google' }: Prop
 
   const handleClick = async () => {
     setLoading(true)
+
+    // PWA đã cài: đi thẳng redirect, không thử popup (popup hay bị chặn ở standalone).
+    if (isStandalonePWA()) {
+      try {
+        await signInWithGoogleRedirect() // điều hướng đi
+        return
+      } catch {
+        toast.error('Đăng nhập Google thất bại. Vui lòng thử lại.')
+        setLoading(false)
+        return
+      }
+    }
+
     const t0 = performance.now()
     try {
-      // Thử popup trước (mượt, hợp desktop & InPrivate).
-      const { user, isNewUser } = await withTimeout(signInWithGoogle(), POPUP_TIMEOUT_MS)
+      // Thử popup trước (mượt, hợp desktop & InPrivate). KHÔNG đặt timeout:
+      // popup đang chờ user gõ email cũng "chưa resolve" — timeout sẽ tưởng nhầm
+      // là treo rồi bắn redirect → hiện 2 form. Chỉ fallback khi có MÃ LỖI rõ ràng.
+      const { user, isNewUser } = await signInWithGoogle()
       console.log(`[signin] popup OAuth: ${Math.round(performance.now() - t0)}ms (isNewUser=${isNewUser})`)
 
       if (isNewUser) await ensureProfile(user)
@@ -69,7 +81,6 @@ export function GoogleSignInButton({ label = 'Tiếp tục với Google' }: Prop
       router.replace('/')
     } catch (err) {
       const code = (err as { code?: string }).code ?? ''
-      const msg  = (err as Error).message ?? ''
 
       // User chủ động đóng popup — không báo lỗi.
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
@@ -77,14 +88,14 @@ export function GoogleSignInButton({ label = 'Tiếp tục với Google' }: Prop
         return
       }
 
-      // Popup bị chặn / treo / không hỗ trợ (PWA, mobile) → fallback redirect.
+      // Popup bị chặn / không hỗ trợ (PWA, mobile thật sự không mở được popup)
+      // → fallback redirect. Đây là lỗi tức thì, không phải "chờ lâu".
       const popupFailed =
-        msg === 'popup-timeout' ||
         code === 'auth/popup-blocked' ||
         code === 'auth/operation-not-supported-in-this-environment'
 
       if (popupFailed) {
-        console.log('[signin] popup that bai → fallback redirect:', code || 'timeout')
+        console.log('[signin] popup bi chan → fallback redirect:', code)
         try {
           await signInWithGoogleRedirect() // điều hướng đi — trang sẽ rời khỏi đây
           return
