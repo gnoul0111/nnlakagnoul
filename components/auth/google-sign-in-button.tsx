@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import type { User } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
-import { signInWithGoogle } from '@/lib/firebase/auth'
+import { signInWithGoogle, signInWithGoogleRedirect, getGoogleRedirectResult } from '@/lib/firebase/auth'
 import { warmUpAppCheck } from '@/lib/firebase/appCheck'
 import { upsertUserProfile } from '@/lib/services/settingsService'
 import { useToast } from '@/hooks/useToast'
@@ -12,47 +13,89 @@ interface Props {
   label?: string
 }
 
+// Ngưỡng coi popup là "treo" → chuyển redirect. Đặt đủ dài (8s) để popup chậm
+// nhưng vẫn chạy được (vd InPrivate) kịp hoàn tất, tránh fallback nhầm sang
+// redirect (redirect dễ lặp vô hạn trong InPrivate/Safari do storage partitioning).
+const POPUP_TIMEOUT_MS = 8000
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('popup-timeout')), ms)),
+  ])
+}
+
+// Tạo/cập nhật profile Firestore lần đầu đăng nhập (idempotent — gọi lại an toàn).
+async function ensureProfile(user: User): Promise<void> {
+  await upsertUserProfile(user.uid, {
+    uid:         user.uid,
+    email:       user.email ?? '',
+    displayName: user.displayName ?? 'Người dùng',
+    photoURL:    user.photoURL ?? null,
+  })
+}
+
 export function GoogleSignInButton({ label = 'Tiếp tục với Google' }: Props) {
   const [loading, setLoading] = useState(false)
   const toast  = useToast()
   const router = useRouter()
 
-  // Làm nóng App Check reCAPTCHA ngay khi vào trang login → token sẵn sàng
-  // trước khi đăng nhập xong, tránh chặn lúc tải dữ liệu sau redirect.
-  useEffect(() => { warmUpAppCheck() }, [])
+  useEffect(() => {
+    // Làm nóng App Check reCAPTCHA → token sẵn sàng trước khi đăng nhập xong.
+    warmUpAppCheck()
+
+    // Nhận kết quả nếu lần này là quay về từ signInWithGoogleRedirect().
+    getGoogleRedirectResult()
+      .then(async res => {
+        if (!res) return
+        setLoading(true)
+        if (res.isNewUser) await ensureProfile(res.user)
+        toast.success(res.isNewUser ? 'Chào mừng bạn đến với Chi Tiêu!' : 'Đăng nhập thành công!')
+        router.replace('/')
+      })
+      .catch(() => { /* không phải redirect return, bỏ qua */ })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClick = async () => {
     setLoading(true)
-    // TODO(tam thoi): log de do thoi gian dang nhap tren production. Go sau khi xong.
     const t0 = performance.now()
     try {
-      const { user, isNewUser } = await signInWithGoogle()
-      const t1 = performance.now()
-      console.log(`[signin] popup OAuth: ${Math.round(t1 - t0)}ms (isNewUser=${isNewUser})`)
+      // Thử popup trước (mượt, hợp desktop & InPrivate).
+      const { user, isNewUser } = await withTimeout(signInWithGoogle(), POPUP_TIMEOUT_MS)
+      console.log(`[signin] popup OAuth: ${Math.round(performance.now() - t0)}ms (isNewUser=${isNewUser})`)
 
-      // Lần đầu đăng nhập bằng Google → tạo profile trong Firestore
-      if (isNewUser) {
-        await upsertUserProfile(user.uid, {
-          uid:         user.uid,
-          email:       user.email ?? '',
-          displayName: user.displayName ?? 'Người dùng',
-          photoURL:    user.photoURL ?? null,
-        })
-        console.log(`[signin] upsert profile: ${Math.round(performance.now() - t1)}ms`)
-      }
-
-      console.log(`[signin] total truoc khi redirect: ${Math.round(performance.now() - t0)}ms`)
+      if (isNewUser) await ensureProfile(user)
       toast.success(isNewUser ? 'Chào mừng bạn đến với Chi Tiêu!' : 'Đăng nhập thành công!')
       router.replace('/')
     } catch (err) {
       const code = (err as { code?: string }).code ?? ''
-      // User đóng popup — không cần show lỗi
+      const msg  = (err as Error).message ?? ''
+
+      // User chủ động đóng popup — không báo lỗi.
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
         setLoading(false)
         return
       }
+
+      // Popup bị chặn / treo / không hỗ trợ (PWA, mobile) → fallback redirect.
+      const popupFailed =
+        msg === 'popup-timeout' ||
+        code === 'auth/popup-blocked' ||
+        code === 'auth/operation-not-supported-in-this-environment'
+
+      if (popupFailed) {
+        console.log('[signin] popup that bai → fallback redirect:', code || 'timeout')
+        try {
+          await signInWithGoogleRedirect() // điều hướng đi — trang sẽ rời khỏi đây
+          return
+        } catch {
+          toast.error('Đăng nhập Google thất bại. Vui lòng thử lại.')
+          setLoading(false)
+          return
+        }
+      }
+
       toast.error('Đăng nhập Google thất bại. Vui lòng thử lại.')
-    } finally {
       setLoading(false)
     }
   }

@@ -15,9 +15,8 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  // Khop mau thanh nav (bg-card dark = hsl 0 0% 11% = #1c1c1c) → vung
-  // home-indicator iOS (iOS to bang theme-color) lien mach voi nav, het khoang den.
-  themeColor:   '#1c1c1c',
+  // themeColor KHONG dat static o day — themeScript tu tao meta dung mau theo mode
+  // (static dark #1c1c1c → iOS to home-indicator dam trong light mode, tao dai den)
   width:        'device-width',
   initialScale: 1,
   viewportFit:  'cover',
@@ -26,23 +25,24 @@ export const viewport: Viewport = {
 }
 
 // Script chay DONG BO truoc khi browser paint —
-// doc theme tu localStorage va apply class 'dark' ngay lap tuc.
-// Neu khong co script nay: browser render trang voi light theme (mau trang)
-// roi sau khi JS load moi chuyen sang dark → user thay flash trang (FOUC).
+// (1) apply dark class de tranh FOUC
+// (2) tao <meta name="theme-color"> dung mau (iOS to vung home-indicator bang gia tri nay)
+//     light=bg-card light (#ffffff), dark=bg-card dark (#1c1c1c)
 const themeScript = `
 (function() {
   try {
     var cache = localStorage.getItem('chitieu_settings_cache');
+    var isDark = true;
     if (cache) {
       var theme = JSON.parse(cache).theme;
-      if (theme === 'dark') document.documentElement.classList.add('dark');
-      else document.documentElement.classList.remove('dark');
-    } else {
-      // Mac dinh dark neu chua co cache
-      document.documentElement.classList.add('dark');
+      isDark = theme !== 'light';
     }
+    if (isDark) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }
+    m.content = isDark ? '#1c1c1c' : '#ffffff';
   } catch(e) {
-    // Fallback: dark mac dinh
     document.documentElement.classList.add('dark');
   }
 })();
