@@ -2,6 +2,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   getAdditionalUserInfo,
   signOut,
@@ -47,6 +49,26 @@ export interface GoogleSignInResult {
 
 export async function signInWithGoogle(): Promise<GoogleSignInResult> {
   const result   = await signInWithPopup(auth, googleProvider)
+  const isNewUser = getAdditionalUserInfo(result)?.isNewUser ?? false
+  return { user: result.user, isNewUser }
+}
+
+/**
+ * Fallback khi popup bị chặn/treo (PWA, mobile). Chuyển hẳn trang qua Google
+ * rồi quay lại — không cần popup. Hàm này điều hướng đi nên không "resolve" theo
+ * nghĩa thông thường; kết quả được lấy ở getGoogleRedirectResult() khi quay về.
+ */
+export async function signInWithGoogleRedirect(): Promise<void> {
+  await signInWithRedirect(auth, googleProvider)
+}
+
+/**
+ * Gọi 1 lần khi app/login mount để nhận kết quả sau khi quay lại từ redirect.
+ * Trả null nếu lần này không phải quay về từ redirect.
+ */
+export async function getGoogleRedirectResult(): Promise<GoogleSignInResult | null> {
+  const result = await getRedirectResult(auth)
+  if (!result) return null
   const isNewUser = getAdditionalUserInfo(result)?.isNewUser ?? false
   return { user: result.user, isNewUser }
 }

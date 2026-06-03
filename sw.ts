@@ -1,6 +1,13 @@
 import { defaultCache }                              from '@serwist/next/worker'
-import { Serwist, NetworkFirst, CacheFirst, ExpirationPlugin } from 'serwist'
+import { Serwist, NetworkFirst, NetworkOnly, CacheFirst, ExpirationPlugin } from 'serwist'
 import type { PrecacheEntry, SerwistGlobalConfig }  from 'serwist'
+
+// FIX AUTH-HANG: Service worker KHÔNG được intercept request đăng nhập của Firebase.
+// Trieu chung khi vi pham: lan dau mo app, signInWithPopup treo mai, popup khong
+// hien — phai tat app mo lai moi duoc (do skipWaiting+clientsClaim gianh quyen
+// dieu khien trang giua chung -> gian doan luong auth dang khoi tao).
+// Cac origin nay phai luon di thang ra network (NetworkOnly), khong cache, khong cham.
+const AUTH_PASSTHROUGH = /^https:\/\/(apis\.google\.com|accounts\.google\.com|www\.google\.com|[^/]+\.firebaseapp\.com|identitytoolkit\.googleapis\.com|securetoken\.googleapis\.com)\//i
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -17,6 +24,12 @@ const serwist = new Serwist({
   clientsClaim:      true,
   navigationPreload: false,
   runtimeCaching: [
+    // PHẢI đặt đầu tiên: request auth của Firebase/Google đi thẳng ra network,
+    // SW không bao giờ intercept (xem AUTH_PASSTHROUGH ở trên).
+    {
+      matcher: ({ url }: { url: URL }) => AUTH_PASSTHROUGH.test(url.href),
+      handler: new NetworkOnly(),
+    },
     // Firebase Firestore
     {
       matcher: /^https:\/\/firestore\.googleapis\.com\/.*/i,
