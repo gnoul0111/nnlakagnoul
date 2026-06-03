@@ -15,8 +15,13 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  // themeColor KHONG dat static o day — themeScript tu tao meta dung mau theo mode
-  // (static dark #1c1c1c → iOS to home-indicator dam trong light mode, tao dai den)
+  // Array theme-color: iOS doc static <meta> luc "Add to Home Screen",
+  // khong doc tag duoc tao bang JS. Dung media query de khop ca 2 mode.
+  // light=bg-card #ffffff, dark=bg-card #1c1c1c — khop mau nav → home-indicator zone lien mach.
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)',  color: '#1c1c1c' },
+  ],
   width:        'device-width',
   initialScale: 1,
   viewportFit:  'cover',
@@ -25,24 +30,23 @@ export const viewport: Viewport = {
 }
 
 // Script chay DONG BO truoc khi browser paint —
-// (1) apply dark class de tranh FOUC
-// (2) tao <meta name="theme-color"> dung mau (iOS to vung home-indicator bang gia tri nay)
-//     light=bg-card light (#ffffff), dark=bg-card dark (#1c1c1c)
+// doc theme tu localStorage va apply class 'dark' ngay lap tuc.
+// Neu khong co script nay: browser render trang voi light theme (mau trang)
+// roi sau khi JS load moi chuyen sang dark → user thay flash trang (FOUC).
 const themeScript = `
 (function() {
   try {
     var cache = localStorage.getItem('chitieu_settings_cache');
-    var isDark = true;
     if (cache) {
       var theme = JSON.parse(cache).theme;
-      isDark = theme !== 'light';
+      if (theme === 'dark') document.documentElement.classList.add('dark');
+      else document.documentElement.classList.remove('dark');
+    } else {
+      // Mac dinh dark neu chua co cache
+      document.documentElement.classList.add('dark');
     }
-    if (isDark) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-    var m = document.querySelector('meta[name="theme-color"]');
-    if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }
-    m.content = isDark ? '#1c1c1c' : '#ffffff';
   } catch(e) {
+    // Fallback: dark mac dinh
     document.documentElement.classList.add('dark');
   }
 })();
