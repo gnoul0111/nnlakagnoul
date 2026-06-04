@@ -11,6 +11,8 @@ import {
   getDocument,
   setDocument,
   updateDocument,
+  onSnapshot,
+  type Unsubscribe,
 } from '@/lib/firebase/firestore'
 import {
   GROUP_EVENT_TYPES,
@@ -138,6 +140,39 @@ export async function getNewGroupEventsSince(
   )
   const snap = await getDocs(q)
   return snap.docs.map(d => ({ id: d.id, ...d.data() }) as GroupEventDoc)
+}
+
+/**
+ * Realtime listener cho group_events của 1 nhóm — PHA B.
+ * Dùng cùng query với getNewGroupEventsSince (groupId + participants array-contains
+ * + timestamp), nên KHÔNG cần thêm composite index mới.
+ * Lần emit đầu tiên trả về cửa sổ gần đây; caller dedup theo id.
+ */
+export function subscribeGroupEvents(
+  groupId: string,
+  uid: string,
+  sinceMs: number,
+  onEvents: (events: GroupEventDoc[]) => void,
+): Unsubscribe {
+  const syncPoint = new Timestamp(Math.floor(sinceMs / 1000), 0)
+  const ref = collection(db, COLLECTIONS.GROUP_EVENTS)
+  const q = query(
+    ref,
+    where('groupId', '==', groupId),
+    where('participants', 'array-contains', uid),
+    where('timestamp', '>', syncPoint),
+    orderBy('timestamp', 'asc'),
+  )
+  return onSnapshot(
+    q,
+    snap => {
+      const changed = snap.docChanges()
+        .filter(c => c.type === 'added' || c.type === 'modified')
+        .map(c => ({ id: c.doc.id, ...c.doc.data() }) as GroupEventDoc)
+      if (changed.length > 0) onEvents(changed)
+    },
+    err => console.error('[groupService] realtime listener error:', err),
+  )
 }
 
 // ─── Entry mutations (build event + append) ───────────────────────────────────

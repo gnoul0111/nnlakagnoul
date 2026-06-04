@@ -45,6 +45,7 @@ export default function GroupDetailPage() {
   const refreshEntries = useGroupStore(s => s.refreshEntries)
   const refreshGroupMeta = useGroupStore(s => s.refreshGroupMeta)
   const dropGroup      = useGroupStore(s => s.dropGroup)
+  const stopRealtime   = useGroupStore(s => s.stopRealtime)
 
   const [entryModal, setEntryModal] = useState<{ open: boolean; edit?: GroupEntry | null }>({ open: false })
   const [deleteTarget, setDeleteTarget] = useState<GroupEntry | null>(null)
@@ -54,7 +55,9 @@ export default function GroupDetailPage() {
 
   useEffect(() => {
     if (user && groupId) selectGroup(groupId, user.uid)
-  }, [user, groupId, selectGroup])
+    // PHA B: dừng realtime listener khi rời trang nhóm (chống leak listener)
+    return () => stopRealtime()
+  }, [user, groupId, selectGroup, stopRealtime])
 
   const nameOf = (uid: string) => group?.members[uid]?.name ?? 'Thành viên'
 
