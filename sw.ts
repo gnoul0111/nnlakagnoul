@@ -112,7 +112,10 @@ const serwist = new Serwist({
 // gọi stopImmediatePropagation() → listener fetch của Serwist (đăng ký sau) không
 // chạy → không respondWith → trình duyệt tự fetch native (auth chạy đúng).
 self.addEventListener('fetch', (event: FetchEvent) => {
-  if (AUTH_PASSTHROUGH.test(event.request.url)) {
+  const url = new URL(event.request.url)
+  // Bỏ qua: (1) các origin auth của Google/Firebase; (2) path same-origin /__/auth,
+  // /__/firebase (auth handler/iframe được proxy về app domain — KHÔNG được cache).
+  if (AUTH_PASSTHROUGH.test(event.request.url) || url.pathname.startsWith('/__/')) {
     event.stopImmediatePropagation()
   }
 })

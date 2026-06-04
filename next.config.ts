@@ -24,8 +24,8 @@ const cspDirectives = [
   "font-src 'self' data:",
   // Images: 'self' + data URIs (avatars) + Firebase Storage
   "img-src 'self' data: blob: https://*.googleapis.com https://*.googleusercontent.com",
-  // Frames: reCAPTCHA cần frame google.com
-  "frame-src https://www.google.com https://nnlakagnoul.firebaseapp.com",
+  // Frames: 'self' (auth iframe khi authDomain = vercel.app qua proxy) + reCAPTCHA + firebaseapp
+  "frame-src 'self' https://www.google.com https://nnlakagnoul.firebaseapp.com",
   // Workers: service worker
   "worker-src 'self' blob:",
   // Report URI (tùy chọn — uncomment nếu có endpoint nhận report)
@@ -56,8 +56,23 @@ const securityHeaders = [
   { key: 'Content-Security-Policy-Report-Only', value: cspDirectives },
 ]
 
+// FIX AUTH-STORAGE-PARTITIONING: phục vụ Firebase Auth handler dưới chính domain app.
+// Vấn đề: authDomain mặc định = nnlakagnoul.firebaseapp.com (khác domain app trên
+// Vercel) → trình duyệt coi là bên thứ ba → Safari/Chrome mobile/InPrivate chặn
+// storage → đăng nhập xong session không lưu → quay về login.
+// Fix (Firebase khuyến nghị): set NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = domain app
+// (nnlakagnoul.vercel.app) + proxy /__/auth/* về firebaseapp.com → auth thành
+// bên-thứ-nhất → chạy mọi nơi (mobile PWA, InPrivate).
+const FIREBASE_AUTH_PROXY_TARGET = 'https://nnlakagnoul.firebaseapp.com'
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  async rewrites() {
+    return [
+      { source: '/__/auth/:path*',     destination: `${FIREBASE_AUTH_PROXY_TARGET}/__/auth/:path*` },
+      { source: '/__/firebase/:path*', destination: `${FIREBASE_AUTH_PROXY_TARGET}/__/firebase/:path*` },
+    ]
+  },
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }]
   },
