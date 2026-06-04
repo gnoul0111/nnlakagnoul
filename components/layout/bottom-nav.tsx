@@ -18,7 +18,7 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="lg:hidden shrink-0 border-t border-border" style={{ paddingBottom: 'env(safe-area-inset-bottom)', background: 'linear-gradient(to bottom, lightblue 0%, lightblue calc(100% - env(safe-area-inset-bottom)), salmon calc(100% - env(safe-area-inset-bottom)), salmon 100%)' }}>
+    <nav className="lg:hidden shrink-0 bg-card border-t border-border">
       <div className="flex items-stretch h-14">
         {NAV_ITEMS.map(item => {
           const isActive      = isNavItemActive(item.href, pathname)
