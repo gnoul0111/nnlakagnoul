@@ -18,8 +18,8 @@ export function BottomNav() {
   }
 
   return (
-    <nav className="lg:hidden shrink-0 bg-card border-t border-border" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-      <div className="flex items-stretch h-12">
+    <nav className="lg:hidden shrink-0 border-t border-border" style={{ paddingBottom: 'env(safe-area-inset-bottom)', background: 'linear-gradient(to bottom, lightblue 0%, lightblue calc(100% - env(safe-area-inset-bottom)), salmon calc(100% - env(safe-area-inset-bottom)), salmon 100%)' }}>
+      <div className="flex items-stretch h-14">
         {NAV_ITEMS.map(item => {
           const isActive      = isNavItemActive(item.href, pathname)
           const isPending     = pendingHref === item.href
@@ -31,7 +31,7 @@ export function BottomNav() {
               key={item.href}
               onClick={() => handleNavClick(item.href)}
               className={cn(
-                'flex-1 flex flex-col items-center justify-end pb-2 gap-1 text-[11px] font-medium',
+                'flex-1 flex flex-col items-center justify-end pb-1 gap-1 text-[11px] font-medium',
                 'transition-colors active:scale-95 min-h-[44px]',
                 isHighlighted
                   ? 'text-primary'
