@@ -11,7 +11,7 @@ import { FormField, Input, PasswordInput } from '@/components/ui/input'
 import { Modal }                   from '@/components/ui/modal'
 import { Spinner }                 from '@/components/ui/spinner'
 import { useAuthStore }            from '@/lib/store/authStore'
-import { useSettingsStore }        from '@/lib/store/settingsStore'
+import { useSettingsStore, selectProfilePhoto } from '@/lib/store/settingsStore'
 import { useToast }                from '@/hooks/useToast'
 import {
   getUserProfile, upsertUserProfile,
@@ -84,6 +84,7 @@ function SectionRow({ children, className }: { children: React.ReactNode; classN
 export function ProfileTab() {
   const user  = useAuthStore(s => s.user)
   const logout = useAuthStore(s => s.logout)
+  const cachedPhoto = useSettingsStore(selectProfilePhoto)
   const toast = useToast()
 
   const fileRef  = useRef<HTMLInputElement>(null)
@@ -168,7 +169,9 @@ export function ProfileTab() {
     }
   }
 
-  const avatarSrc = profile?.photoURL ?? user?.photoURL ?? null
+  // Ưu tiên cache từ settingsStore (render tức thì, không nhấp nháy) →
+  // profile fetch ngầm chỉ override khi giá trị thực sự khác.
+  const avatarSrc = profile?.photoURL ?? cachedPhoto ?? user?.photoURL ?? null
   const displayName = user?.displayName ?? ''
   const email       = user?.email ?? ''
 

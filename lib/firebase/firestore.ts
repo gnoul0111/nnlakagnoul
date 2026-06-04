@@ -13,9 +13,11 @@ import {
   startAfter,
   Timestamp,
   writeBatch,
+  onSnapshot,
   type QueryConstraint,
   type DocumentData,
   type QueryDocumentSnapshot,
+  type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from './config'
 
@@ -104,5 +106,7 @@ export {
   startAfter,
   Timestamp,
   writeBatch,
+  onSnapshot,
   db,
 }
+export type { Unsubscribe }

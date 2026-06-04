@@ -12,6 +12,14 @@ import type { PrecacheEntry, SerwistGlobalConfig }  from 'serwist'
 // xu ly -> khong respondWith -> browser tu fetch native (cach duy nhat chay dung).
 const AUTH_PASSTHROUGH = /^https:\/\/(apis\.google\.com|accounts\.google\.com|www\.google\.com|[^/]+\.firebaseapp\.com|identitytoolkit\.googleapis\.com|securetoken\.googleapis\.com)\//i
 
+// FIX REALTIME: kênh streaming dài của Firestore (onSnapshot listener + writes)
+// dùng WebChannel tại .../Firestore/Listen/channel và .../Write/channel.
+// NetworkFirst (cache + timeout 10s) ở runtimeCaching bên dưới sẽ cắt đứt kênh
+// streaming → realtime không chạy trong PWA. Phải BỎ QUA HOÀN TOÀN (như auth):
+// stopImmediatePropagation → browser fetch native → WebChannel chạy đúng.
+// CHỈ nhắm /channel streaming — getDocs một-phát vẫn qua NetworkFirst (giữ cache offline).
+const FIRESTORE_STREAM_PASSTHROUGH = /^https:\/\/firestore\.googleapis\.com\/.*\/(Listen|Write)\/channel/i
+
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
     __SW_MANIFEST: (PrecacheEntry | string)[] | undefined
@@ -115,7 +123,11 @@ self.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(event.request.url)
   // Bỏ qua: (1) các origin auth của Google/Firebase; (2) path same-origin /__/auth,
   // /__/firebase (auth handler/iframe được proxy về app domain — KHÔNG được cache).
-  if (AUTH_PASSTHROUGH.test(event.request.url) || url.pathname.startsWith('/__/')) {
+  if (
+    AUTH_PASSTHROUGH.test(event.request.url) ||
+    FIRESTORE_STREAM_PASSTHROUGH.test(event.request.url) ||
+    url.pathname.startsWith('/__/')
+  ) {
     event.stopImmediatePropagation()
   }
 })

@@ -5,8 +5,10 @@ import {
   getLatestSnapshot,
   saveSnapshot,
   getEventsSinceTimestamp,
+  subscribeNewEvents,
   type SnapshotDoc,
 } from '@/lib/services/eventService'
+import type { Unsubscribe } from '@/lib/firebase/firestore'
 import {
   replay,
   applyEvent,
@@ -21,6 +23,11 @@ import { Timestamp } from '@/lib/firebase/firestore'
 // ─── Cache constants ──────────────────────────────────────────────────────────
 
 const CACHE_KEY_PREFIX = 'chitieu_events_cache_'
+
+// PHA B: cửa sổ lùi cho cursor realtime listener (tránh sót event do clock skew).
+// Listener emit đầu tiên sẽ trả về events trong cửa sổ này — đa phần đã có trong
+// cache, mergeEvents dedup theo id nên không trùng.
+const REALTIME_SKEW_BUFFER_MS = 30 * 1000
 
 // FIX PERF-01: Thay sessionStorage bằng IndexedDB.
 //
@@ -159,6 +166,11 @@ function enqueueSyncOperation(op: () => Promise<void>): Promise<void> {
   return _syncChain
 }
 
+// ─── Realtime listener handle (PHA B) ───────────────────────────────────────────
+// Một listener tại một thời điểm. Lưu hàm unsubscribe ở module scope để
+// luôn tear down trước khi subscribe lại (chống leak / nhân đôi listener).
+let _unsubRealtime: Unsubscribe | null = null
+
 // ─── Store state ──────────────────────────────────────────────────────────────
 
 interface EventStoreState {
@@ -170,12 +182,14 @@ interface EventStoreState {
   isLoading:       boolean
   error:           string | null
 
-  loadEvents:       (userId: string) => Promise<void>
-  syncEvents:       (userId: string) => Promise<void>
-  invalidateCache:  (userId: string) => void
-  clearAllCache:    (userId: string) => void
-  appendLocalEvent: (event: EventDoc) => void
-  removeLocalEvent: (eventId: string) => void
+  loadEvents:          (userId: string) => Promise<void>
+  syncEvents:          (userId: string) => Promise<void>
+  subscribeRealtime:   (userId: string) => void
+  unsubscribeRealtime: () => void
+  invalidateCache:     (userId: string) => void
+  clearAllCache:       (userId: string) => void
+  appendLocalEvent:    (event: EventDoc) => void
+  removeLocalEvent:    (eventId: string) => void
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -399,6 +413,58 @@ export const useEventStore = create<EventStoreState>((set, get) => {
       })
     },
 
+    // ── Realtime listener (PHA B) ──────────────────────────────────────────────
+    // Subscribe onSnapshot: khi thiết bị khác ghi event mới → Firestore đẩy về
+    // → merge vào cache qua ĐÚNG đường delta sync cũ (prune optimistic →
+    // mergeEvents → replay), bọc trong _syncChain để không đua với syncEvents.
+    //
+    // Cursor bắt đầu = _lastSync − buffer (nếu chưa có thì 'now' − buffer).
+    // Lần emit đầu tiên trả về toàn bộ cửa sổ gần đây (đa phần đã có trong
+    // cache); mergeEvents dedup theo id nên không gây trùng.
+    subscribeRealtime: (userId: string) => {
+      // Tear down listener cũ trước (chống leak / nhân đôi khi đổi user / re-mount)
+      if (_unsubRealtime) {
+        _unsubRealtime()
+        _unsubRealtime = null
+      }
+
+      const sinceMs = (get()._lastSync ?? Date.now()) - REALTIME_SKEW_BUFFER_MS
+
+      _unsubRealtime = subscribeNewEvents(userId, sinceMs, incoming => {
+        // Guard: user đã logout / đổi user trong lúc listener còn sống
+        if (get()._currentUserId !== userId) return
+
+        enqueueSyncOperation(async () => {
+          if (get()._currentUserId !== userId) return
+
+          const currentCache = get()._eventsCache ?? []
+          const cleanedCache = pruneReplacedOptimistic(currentCache, incoming)
+          const merged       = mergeEvents(cleanedCache, incoming)
+
+          // Không có gì thay đổi (không prune, không event mới) → bỏ qua
+          if (merged === currentCache) return
+
+          const newLastSync  = Date.now()
+          const snapshot     = get()._snapshot
+          const replayedState = snapshot
+            ? replayFromSnapshot(snapshot.state, merged)
+            : replay(merged)
+
+          writeLocalCache(userId, { snapshot, events: merged, lastSync: newLastSync })
+          set({ _eventsCache: merged, _lastSync: newLastSync, replayedState })
+
+          await checkAndCreateSnapshot(userId)
+        })
+      })
+    },
+
+    unsubscribeRealtime: () => {
+      if (_unsubRealtime) {
+        _unsubRealtime()
+        _unsubRealtime = null
+      }
+    },
+
     appendLocalEvent: (event: EventDoc) => {
       const { _eventsCache, _currentUserId, _lastSync, replayedState } = get()
       if (!_eventsCache || !_currentUserId) return
@@ -452,6 +518,11 @@ export const useEventStore = create<EventStoreState>((set, get) => {
     clearAllCache: (userId: string) => {
       clearLocalCache(userId)
       _syncChain = Promise.resolve()
+      // Tear down realtime listener (logout / đổi user)
+      if (_unsubRealtime) {
+        _unsubRealtime()
+        _unsubRealtime = null
+      }
       set({
         _snapshot:      null,
         _eventsCache:   null,
