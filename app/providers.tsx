@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useAuthStore }     from '@/lib/store/authStore'
 import { useEventStore }    from '@/lib/store/eventStore'
 import { useSettingsStore } from '@/lib/store/settingsStore'
+import { useVisibilitySync } from '@/hooks/useVisibilitySync'
 import { setupOfflineQueueListener } from '@/lib/offline/offlineQueue'
 import { ToastContainer }   from '@/components/ui/toast'
 import { getBudget }        from '@/lib/services/budgetService'
@@ -16,6 +17,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const syncEvents     = useEventStore(s => s.syncEvents)
   const loadSettings   = useSettingsStore(s => s.loadSettings)
   const user           = useAuthStore(s => s.user)
+
+  // PHA A: re-sync delta khi user quay lại app (focus/visibility, không poll)
+  useVisibilitySync()
 
   // Khởi tạo auth + offline queue listener 1 lần
   useEffect(() => {
