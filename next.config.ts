@@ -36,8 +36,10 @@ const securityHeaders = [
   // same-origin-allow-popups: cho phép Google sign-in popup communicate về app
   // (Vercel mặc định set same-origin, block hoàn toàn → Google OAuth không hoạt động)
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
-  // Ngăn app bị nhúng vào iframe trên domain khác → chống clickjacking
-  { key: 'X-Frame-Options', value: 'DENY' },
+  // SAMEORIGIN (không DENY): Firebase Auth nạp iframe /__/auth/iframe cùng-origin
+  // (authDomain = domain app qua proxy) → DENY sẽ chặn iframe này → kẹt "Đang tải".
+  // SAMEORIGIN cho phép cùng-origin nhúng nhưng vẫn chặn domain khác → vẫn chống clickjacking.
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   // Ngăn browser đoán content-type → chống MIME sniffing attacks
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   // Giảm thông tin referrer leak khi user click link ra ngoài

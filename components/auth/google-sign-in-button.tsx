@@ -13,13 +13,18 @@ interface Props {
   label?: string
 }
 
-// App đã cài chạy toàn màn hình (standalone). Popup hay bị chặn trong PWA →
-// dùng redirect thẳng (Firebase khuyến nghị). PWA cài đặt không dính lỗi storage
-// partitioning như InPrivate nên redirect chạy ổn.
-function isStandalonePWA(): boolean {
+// Khi nào dùng redirect thay vì popup:
+//  - Mọi thiết bị mobile (iOS Safari + Android): popup trên mobile rất hay treo
+//    (iOS Safari chặn/đẩy popup ra tab khác, COOP chặn window.closed).
+//  - PWA đã cài (standalone): popup không mở được trong standalone.
+// Nhờ proxy authDomain = domain app (first-party) nên redirect chạy ổn trên mobile,
+// không còn lỗi storage partitioning. Desktop vẫn dùng popup cho mượt.
+function shouldUseRedirect(): boolean {
   if (typeof window === 'undefined') return false
-  return window.matchMedia?.('(display-mode: standalone)').matches === true
-    || (window.navigator as { standalone?: boolean }).standalone === true // iOS Safari
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches === true
+    || (window.navigator as { standalone?: boolean }).standalone === true // iOS Safari PWA
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent)
+  return standalone || isMobile
 }
 
 // Tạo/cập nhật profile Firestore lần đầu đăng nhập (idempotent — gọi lại an toàn).
@@ -56,8 +61,8 @@ export function GoogleSignInButton({ label = 'Tiếp tục với Google' }: Prop
   const handleClick = async () => {
     setLoading(true)
 
-    // PWA đã cài: đi thẳng redirect, không thử popup (popup hay bị chặn ở standalone).
-    if (isStandalonePWA()) {
+    // Mobile (Safari/Android/PWA): đi thẳng redirect, không thử popup (popup hay treo).
+    if (shouldUseRedirect()) {
       try {
         await signInWithGoogleRedirect() // điều hướng đi
         return
