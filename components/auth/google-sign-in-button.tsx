@@ -4,27 +4,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from 'firebase/auth'
 import { Button } from '@/components/ui/button'
-import { signInWithGoogle, signInWithGoogleRedirect, getGoogleRedirectResult } from '@/lib/firebase/auth'
+import { signInWithGoogleRedirect, getGoogleRedirectResult } from '@/lib/firebase/auth'
 import { warmUpAppCheck } from '@/lib/firebase/appCheck'
 import { upsertUserProfile } from '@/lib/services/settingsService'
 import { useToast } from '@/hooks/useToast'
 
 interface Props {
   label?: string
-}
-
-// Khi nào dùng redirect thay vì popup:
-//  - Mọi thiết bị mobile (iOS Safari + Android): popup trên mobile rất hay treo
-//    (iOS Safari chặn/đẩy popup ra tab khác, COOP chặn window.closed).
-//  - PWA đã cài (standalone): popup không mở được trong standalone.
-// Nhờ proxy authDomain = domain app (first-party) nên redirect chạy ổn trên mobile,
-// không còn lỗi storage partitioning. Desktop vẫn dùng popup cho mượt.
-function shouldUseRedirect(): boolean {
-  if (typeof window === 'undefined') return false
-  const standalone = window.matchMedia?.('(display-mode: standalone)').matches === true
-    || (window.navigator as { standalone?: boolean }).standalone === true // iOS Safari PWA
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent)
-  return standalone || isMobile
 }
 
 // Tạo/cập nhật profile Firestore lần đầu đăng nhập (idempotent — gọi lại an toàn).
@@ -60,57 +46,13 @@ export function GoogleSignInButton({ label = 'Tiếp tục với Google' }: Prop
 
   const handleClick = async () => {
     setLoading(true)
-
-    // Mobile (Safari/Android/PWA): đi thẳng redirect, không thử popup (popup hay treo).
-    if (shouldUseRedirect()) {
-      try {
-        await signInWithGoogleRedirect() // điều hướng đi
-        return
-      } catch {
-        toast.error('Đăng nhập Google thất bại. Vui lòng thử lại.')
-        setLoading(false)
-        return
-      }
-    }
-
-    const t0 = performance.now()
+    // Dùng redirect cho MỌI thiết bị (cả desktop). Nhờ proxy authDomain = domain app
+    // (first-party) nên redirect chạy ổn khắp nơi, và luôn vào trong 1 lần bấm —
+    // tránh lỗi COOP window.closed của popup (đôi khi phải bấm 2 lần mới vào).
+    // Trang sẽ điều hướng đi; kết quả được nhận ở getGoogleRedirectResult() khi quay về.
     try {
-      // Thử popup trước (mượt, hợp desktop & InPrivate). KHÔNG đặt timeout:
-      // popup đang chờ user gõ email cũng "chưa resolve" — timeout sẽ tưởng nhầm
-      // là treo rồi bắn redirect → hiện 2 form. Chỉ fallback khi có MÃ LỖI rõ ràng.
-      const { user, isNewUser } = await signInWithGoogle()
-      console.log(`[signin] popup OAuth: ${Math.round(performance.now() - t0)}ms (isNewUser=${isNewUser})`)
-
-      if (isNewUser) await ensureProfile(user)
-      toast.success(isNewUser ? 'Chào mừng bạn đến với Chi Tiêu!' : 'Đăng nhập thành công!')
-      router.replace('/')
-    } catch (err) {
-      const code = (err as { code?: string }).code ?? ''
-
-      // User chủ động đóng popup — không báo lỗi.
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        setLoading(false)
-        return
-      }
-
-      // Popup bị chặn / không hỗ trợ (PWA, mobile thật sự không mở được popup)
-      // → fallback redirect. Đây là lỗi tức thì, không phải "chờ lâu".
-      const popupFailed =
-        code === 'auth/popup-blocked' ||
-        code === 'auth/operation-not-supported-in-this-environment'
-
-      if (popupFailed) {
-        console.log('[signin] popup bi chan → fallback redirect:', code)
-        try {
-          await signInWithGoogleRedirect() // điều hướng đi — trang sẽ rời khỏi đây
-          return
-        } catch {
-          toast.error('Đăng nhập Google thất bại. Vui lòng thử lại.')
-          setLoading(false)
-          return
-        }
-      }
-
+      await signInWithGoogleRedirect()
+    } catch {
       toast.error('Đăng nhập Google thất bại. Vui lòng thử lại.')
       setLoading(false)
     }
