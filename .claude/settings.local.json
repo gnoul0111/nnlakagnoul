@@ -35,7 +35,8 @@
       "Bash(node -e \"const p=require\\('./package.json'\\); const all={...p.dependencies,...p.devDependencies}; console.log\\(Object.keys\\(all\\).filter\\(k=>k.includes\\('play'\\)||k.includes\\('puppeteer'\\)\\).join\\('\\\\n'\\) || 'none'\\)\")",
       "Bash(git checkout *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
