@@ -31,7 +31,7 @@ export function BottomNav() {
               key={item.href}
               onClick={() => handleNavClick(item.href)}
               className={cn(
-                'flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium',
+                'flex-1 flex flex-col items-center justify-end pb-2 gap-1 text-[11px] font-medium',
                 'transition-colors active:scale-95 min-h-[44px]',
                 isHighlighted
                   ? 'text-primary'
