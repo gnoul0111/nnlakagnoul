@@ -57,10 +57,24 @@ describe('getGroupRecipients', () => {
     }))).toEqual([])
   })
 
-  test('STATUS_SET pending/skipped → không báo', () => {
+  test('STATUS_SET skipped, payer ≠ actor → báo payer', () => {
     expect(getGroupRecipients(ev({
       eventType: 'GROUP_ENTRY_STATUS_SET', actorUid: 'B',
       data: { status: 'skipped', payerUid: 'A' },
+    }))).toEqual(['A'])
+  })
+
+  test('STATUS_SET skipped, payer = actor → không tự báo', () => {
+    expect(getGroupRecipients(ev({
+      eventType: 'GROUP_ENTRY_STATUS_SET', actorUid: 'A',
+      data: { status: 'skipped', payerUid: 'A' },
+    }))).toEqual([])
+  })
+
+  test('STATUS_SET pending → không báo', () => {
+    expect(getGroupRecipients(ev({
+      eventType: 'GROUP_ENTRY_STATUS_SET', actorUid: 'B',
+      data: { status: 'pending', payerUid: 'A' },
     }))).toEqual([])
   })
 
@@ -116,12 +130,20 @@ describe('buildGroupNotifBody', () => {
     expect(out?.body).toBe('An thêm khoản «Khoản chung»')
   })
 
-  test('STATUS_SET → câu báo người trả', () => {
+  test('STATUS_SET done → câu báo "xử lý"', () => {
     const out = buildGroupNotifBody(
       ev({ eventType: 'GROUP_ENTRY_STATUS_SET', data: { status: 'done', note: 'Đi chợ' } }),
       'A', names, fmt,
     )
     expect(out?.body).toBe('An đã xử lý phần của họ trong «Đi chợ»')
+  })
+
+  test('STATUS_SET skipped → câu báo "bỏ qua"', () => {
+    const out = buildGroupNotifBody(
+      ev({ eventType: 'GROUP_ENTRY_STATUS_SET', data: { status: 'skipped', note: 'Đi chợ' } }),
+      'A', names, fmt,
+    )
+    expect(out?.body).toBe('An đã bỏ qua phần của họ trong «Đi chợ»')
   })
 
   test('DELETED → câu báo xoá', () => {

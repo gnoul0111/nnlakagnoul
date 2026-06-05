@@ -30,8 +30,8 @@ function formatVND(n) {
  *    data.notifyFinancial === false (chỉ sửa note/ngày → không báo). Thiếu field
  *    (client cũ) → coi như có thay đổi → vẫn báo.
  *  • GROUP_ENTRY_DELETED → mọi participant trừ người xoá.
- *  • GROUP_ENTRY_STATUS_SET → CHỈ báo người trả (payerUid) khi status === 'done'
- *    và payer ≠ người bấm. Thiếu payerUid (client cũ) → không báo.
+ *  • GROUP_ENTRY_STATUS_SET → báo người trả (payerUid) khi status === 'done' HOẶC
+ *    'skipped' và payer ≠ người bấm. Thiếu payerUid (client cũ) → không báo.
  *  • Loại khác → không báo.
  */
 function getGroupRecipients(ev) {
@@ -49,7 +49,8 @@ function getGroupRecipients(ev) {
         return participants.filter(uid => uid !== actor);
     }
     if (type === 'GROUP_ENTRY_STATUS_SET') {
-        if (data.status !== 'done')
+        const status = data.status;
+        if (status !== 'done' && status !== 'skipped')
             return [];
         const payer = data.payerUid;
         if (typeof payer !== 'string' || !payer || payer === actor)
@@ -82,7 +83,8 @@ function buildGroupNotifBody(ev, recipientUid, names, fmtMoney = formatVND) {
         return { title, body: `${names.actorName} đã xoá khoản «${note}»` };
     }
     if (type === 'GROUP_ENTRY_STATUS_SET') {
-        return { title, body: `${names.actorName} đã xử lý phần của họ trong «${note}»` };
+        const verb = data.status === 'skipped' ? 'bỏ qua' : 'xử lý';
+        return { title, body: `${names.actorName} đã ${verb} phần của họ trong «${note}»` };
     }
     return null;
 }
