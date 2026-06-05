@@ -62,13 +62,17 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       // Apply theme ngay từ cache — không chờ Firestore
       applyTheme(cachedSettings.theme)
 
-      // Đọc moneyHidden từ localStorage (source of truth nhanh nhất)
+      // Đọc moneyHidden từ localStorage (source of truth nhanh nhất).
+      // Phòng thủ: value có thể là chuỗi "undefined" (do bug ghi cũ) → JSON.parse
+      // sẽ nổ "undefined is not valid JSON" làm chết loadSettings → kẹt "Đang tải".
       const localHidden = typeof window !== 'undefined'
         ? localStorage.getItem('chitieu_money_hidden')
         : null
-      const moneyHidden = localHidden !== null
-        ? JSON.parse(localHidden) as boolean
-        : cachedSettings.moneyHidden
+      let moneyHidden = cachedSettings.moneyHidden ?? false
+      if (localHidden !== null && localHidden !== 'undefined') {
+        try { moneyHidden = JSON.parse(localHidden) as boolean }
+        catch { /* value hỏng → giữ giá trị từ cache, dọn lại ở bước sync bên dưới */ }
+      }
 
       // Also load cached photo if available
       const cachedPhoto = typeof window !== 'undefined'
@@ -108,7 +112,9 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       // Trước đây logic ưu tiên localStorage → device B không bao giờ thấy
       // thay đổi từ device A vì localStorage của B vẫn là giá trị cũ.
       if (typeof window !== 'undefined') {
-        localStorage.setItem('chitieu_money_hidden', JSON.stringify(settings.moneyHidden))
+        // ?? false: doc Firestore cũ có thể thiếu field moneyHidden → tránh ghi
+        // chuỗi "undefined" vào localStorage (gây JSON.parse nổ ở lần load sau).
+        localStorage.setItem('chitieu_money_hidden', JSON.stringify(settings.moneyHidden ?? false))
       }
 
       set({
