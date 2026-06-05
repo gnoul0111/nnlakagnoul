@@ -52,7 +52,11 @@ export function ExpensesTab() {
       .reduce((s, e) => s + e.amount, 0)
 
     const grouped = list
-      .sort((a, b) => b.date.localeCompare(a.date))
+      .sort((a, b) => {
+        const dateCmp = b.date.localeCompare(a.date)
+        if (dateCmp !== 0) return dateCmp
+        return (b._updatedClientTimestamp ?? '').localeCompare(a._updatedClientTimestamp ?? '')
+      })
       .reduce<Record<string, Expense[]>>((acc, e) => {
         if (!acc[e.date]) acc[e.date] = []
         acc[e.date].push(e)
