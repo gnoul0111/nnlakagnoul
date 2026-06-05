@@ -1,5 +1,5 @@
 // addDoc/getDocs không re-export bởi '@/lib/firebase/firestore' → import thẳng SDK
-import { addDoc, getDocs } from 'firebase/firestore'
+import { addDoc, getDocs, limit } from 'firebase/firestore'
 import {
   collection,
   query,
@@ -290,4 +290,18 @@ export async function setEntryStatus(
     // ("X đã xử lý phần của họ") mà không phải replay lại khoản để tra payer/tên.
     data: { id: entry.id, uid: actorUid, status, payerUid: entry.payerUid, note: entry.note },
   })
+}
+
+/** Kiểm tra group entry đã bị xoá chưa — dùng để unlock khoản orphan trong sổ cá nhân. */
+export async function isGroupEntryDeleted(groupId: string, entryId: string): Promise<boolean> {
+  const ref = collection(db, COLLECTIONS.GROUP_EVENTS)
+  const q = query(
+    ref,
+    where('groupId', '==', groupId),
+    where('eventType', '==', GROUP_EVENT_TYPES.GROUP_ENTRY_DELETED),
+    where('data.id', '==', entryId),
+    limit(1),
+  )
+  const snap = await getDocs(q)
+  return !snap.empty
 }
