@@ -234,6 +234,7 @@ export async function updateGroupEntry(
   actorUid: string,
   next: GroupEntry,
   prevParticipants: string[],
+  financialChanged = true,
 ): Promise<void> {
   const participants = Array.from(new Set([...prevParticipants, ...next.participants]))
   await appendGroupEvent({
@@ -251,6 +252,9 @@ export async function updateGroupEntry(
       splitMode: next.splitMode,
       splits:    next.splits,
       participants: next.participants,
+      // Hint cho Cloud Function groupEventNotify: chỉ báo khi tiền/cách chia đổi
+      // (tránh spam khi chỉ sửa note/ngày). Thiếu field (client cũ) → CF mặc định báo.
+      notifyFinancial: financialChanged,
     },
   })
 }
@@ -281,6 +285,8 @@ export async function setEntryStatus(
     participants: entry.participants,
     eventType:    GROUP_EVENT_TYPES.GROUP_ENTRY_STATUS_SET,
     createdAt:    new Date().toISOString(),
-    data: { id: entry.id, uid: actorUid, status },
+    // payerUid + note: để Cloud Function groupEventNotify báo riêng cho người trả
+    // ("X đã xử lý phần của họ") mà không phải replay lại khoản để tra payer/tên.
+    data: { id: entry.id, uid: actorUid, status, payerUid: entry.payerUid, note: entry.note },
   })
 }

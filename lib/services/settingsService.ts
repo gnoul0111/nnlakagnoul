@@ -13,6 +13,7 @@ export function defaultSettings(userId: string): UserSettings {
     salaryDay: 0,
     moneyHidden: false,
     notifEnabled: false,
+    groupNotifEnabled: true,
     notifTime: '21:00',
     eventReminderTypes: [1],
     fcmToken: null,

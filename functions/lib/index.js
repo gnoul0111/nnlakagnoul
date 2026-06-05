@@ -33,12 +33,13 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cleanupNotifData = exports.sendTestNotification = exports.notifyNewVersion = exports.budgetAlertOnExpense = exports.calendarEventReminder = exports.debtDueReminder = exports.dailyExpenseReminder = void 0;
+exports.groupEventNotify = exports.cleanupNotifData = exports.sendTestNotification = exports.notifyNewVersion = exports.budgetAlertOnExpense = exports.calendarEventReminder = exports.debtDueReminder = exports.dailyExpenseReminder = void 0;
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions"));
 const params_1 = require("firebase-functions/params");
 const messaging_1 = require("firebase-admin/messaging");
 const firestore_1 = require("firebase-admin/firestore");
+const groupNotify_1 = require("./groupNotify");
 // ─── Secrets ──────────────────────────────────────────────────────────────────
 // Thay thế functions.config() (đã deprecated). Set bằng:
 //   firebase functions:secrets:set NOTIFY_SECRET
@@ -46,6 +47,8 @@ const notifySecret = (0, params_1.defineSecret)('NOTIFY_SECRET');
 // ─── Init ─────────────────────────────────────────────────────────────────────
 admin.initializeApp();
 const db = (0, firestore_1.getFirestore)();
+// In-memory rate limit store cho notifyNewVersion endpoint
+const ipRateLimitStore = new Map();
 // ─── Timezone ─────────────────────────────────────────────────────────────────
 const TZ = 'Asia/Ho_Chi_Minh';
 /** Lấy giờ địa phương theo múi giờ Việt Nam dạng "HH:mm" */
@@ -642,9 +645,10 @@ exports.notifyNewVersion = functions
     .region('asia-southeast1')
     .runWith({ secrets: [notifySecret] })
     .https.onRequest(async (req, res) => {
-    var _a, _b, _c, _d, _e, _f, _g;
-    // CORS cho manual trigger từ browser nếu cần
-    res.set('Access-Control-Allow-Origin', '*');
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
+    // CORS chỉ cho phép app domain — không dùng wildcard (*)
+    const allowedOrigin = (_a = process.env.APP_ORIGIN) !== null && _a !== void 0 ? _a : 'https://expense-app-tau-six.vercel.app';
+    res.set('Access-Control-Allow-Origin', allowedOrigin);
     res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.set('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') {
@@ -655,6 +659,23 @@ exports.notifyNewVersion = functions
         res.status(405).json({ error: 'Method not allowed' });
         return;
     }
+    // Rate limit theo IP: tối đa 10 lần/giờ — ngăn brute force secret
+    const ip = (_f = (_d = (_c = (_b = req.headers['x-forwarded-for']) === null || _b === void 0 ? void 0 : _b.split(',')[0]) === null || _c === void 0 ? void 0 : _c.trim()) !== null && _d !== void 0 ? _d : (_e = req.socket) === null || _e === void 0 ? void 0 : _e.remoteAddress) !== null && _f !== void 0 ? _f : 'unknown';
+    const rateLimitKey = `notifyNewVersion:${ip}`;
+    const now = Date.now();
+    const WINDOW_MS = 60 * 60 * 1000; // 1 giờ
+    const MAX_ATTEMPTS = 10;
+    const entry = ipRateLimitStore.get(rateLimitKey);
+    if (entry && now < entry.windowEnd) {
+        if (entry.count >= MAX_ATTEMPTS) {
+            res.status(429).json({ error: 'Too many requests' });
+            return;
+        }
+        entry.count++;
+    }
+    else {
+        ipRateLimitStore.set(rateLimitKey, { count: 1, windowEnd: now + WINDOW_MS });
+    }
     // Xác thực qua secret — tránh kẻ lạ gọi API này gửi spam
     const expectedSecret = notifySecret.value();
     if (!expectedSecret) {
@@ -662,15 +683,15 @@ exports.notifyNewVersion = functions
         res.status(500).json({ error: 'Server not configured' });
         return;
     }
-    const providedSecret = (_b = (_a = req.body) === null || _a === void 0 ? void 0 : _a.secret) !== null && _b !== void 0 ? _b : (_c = req.query) === null || _c === void 0 ? void 0 : _c.secret;
+    const providedSecret = (_h = (_g = req.body) === null || _g === void 0 ? void 0 : _g.secret) !== null && _h !== void 0 ? _h : (_j = req.query) === null || _j === void 0 ? void 0 : _j.secret;
     if (providedSecret !== expectedSecret) {
         functions.logger.warn('[notifyNewVersion] Secret không đúng');
         res.status(401).json({ error: 'Unauthorized' });
         return;
     }
     // Có thể truyền optional version/buildNumber từ CI
-    const version = String((_e = (_d = req.body) === null || _d === void 0 ? void 0 : _d.version) !== null && _e !== void 0 ? _e : '').slice(0, 50);
-    const buildNumber = String((_g = (_f = req.body) === null || _f === void 0 ? void 0 : _f.buildNumber) !== null && _g !== void 0 ? _g : '').slice(0, 20);
+    const version = String((_l = (_k = req.body) === null || _k === void 0 ? void 0 : _k.version) !== null && _l !== void 0 ? _l : '').slice(0, 50);
+    const buildNumber = String((_o = (_m = req.body) === null || _m === void 0 ? void 0 : _m.buildNumber) !== null && _o !== void 0 ? _o : '').slice(0, 20);
     try {
         const users = await getNotifUsers();
         functions.logger.info(`[notifyNewVersion] Broadcasting to ${users.length} users`);
@@ -814,5 +835,113 @@ exports.cleanupNotifData = functions
     }
     functions.logger.info(`[cleanupNotifData] Deleted ${alertsDeleted} alert logs + ${tokensDeleted} stale tokens`);
     return null;
+});
+// ─── FUNCTION 8: Thông báo nhóm (chi tiêu chung) ─────────────────────────────
+//
+// Trigger onCreate trên group_events. Báo cho các thành viên KHÁC khi:
+//   • Thêm khoản chung mới   (mọi participant trừ người tạo)
+//   • Sửa khoản (tiền/chia)  (mọi participant trừ người sửa; bỏ qua nếu chỉ
+//                             sửa note/ngày — client gắn cờ data.notifyFinancial)
+//   • Ai đó bấm "Đã xử lý"   (báo RIÊNG người trả)
+//
+// Logic chọn người nhận + soạn nội dung nằm ở ./groupNotify (thuần, unit-test).
+// Function này chỉ lo I/O Firestore + gửi FCM (tái dùng sendNotificationToUser).
+/** Gom tokens của 1 user (legacy field + subcollection). Trả [] nếu không có. */
+async function getTokensForUser(userId) {
+    var _a;
+    const settingsDoc = await db.collection('user_settings').doc(userId).get();
+    if (!settingsDoc.exists)
+        return { tokens: [], notifEnabled: false, groupNotifEnabled: false };
+    const data = settingsDoc.data();
+    const tokens = [];
+    const seen = new Set();
+    if (data.fcmToken && typeof data.fcmToken === 'string') {
+        tokens.push({ token: data.fcmToken, docRef: null });
+        seen.add(data.fcmToken);
+    }
+    try {
+        const tokensSnap = await settingsDoc.ref.collection('fcm_tokens').get();
+        for (const tokenDoc of tokensSnap.docs) {
+            const t = (_a = tokenDoc.data()) === null || _a === void 0 ? void 0 : _a.token;
+            if (typeof t === 'string' && !seen.has(t)) {
+                tokens.push({ token: t, docRef: tokenDoc.ref });
+                seen.add(t);
+            }
+        }
+    }
+    catch ( /* no-op: subcollection chưa tồn tại */_b) { /* no-op: subcollection chưa tồn tại */ }
+    return {
+        tokens,
+        notifEnabled: !!data.notifEnabled,
+        // Mặc định true: user cũ chưa có field này vẫn nhận thông báo nhóm.
+        groupNotifEnabled: data.groupNotifEnabled !== false,
+    };
+}
+exports.groupEventNotify = functions
+    .region('asia-southeast1')
+    .firestore.document('group_events/{eventId}')
+    .onCreate(async (snap, context) => {
+    var _a, _b, _c, _d, _e;
+    const raw = snap.data();
+    if (!raw)
+        return;
+    const ev = {
+        eventType: String((_a = raw.eventType) !== null && _a !== void 0 ? _a : ''),
+        actorUid: String((_b = raw.actorUid) !== null && _b !== void 0 ? _b : ''),
+        participants: Array.isArray(raw.participants) ? raw.participants : [],
+        data: ((_c = raw.data) !== null && _c !== void 0 ? _c : {}),
+    };
+    const recipients = (0, groupNotify_1.getGroupRecipients)(ev);
+    if (recipients.length === 0)
+        return;
+    const groupId = String((_d = raw.groupId) !== null && _d !== void 0 ? _d : '');
+    if (!groupId)
+        return;
+    // Lấy tên nhóm + tên người thực hiện (1 read). Fallback nếu thiếu.
+    let groupName = 'Nhóm';
+    let actorName = 'Thành viên';
+    try {
+        const groupDoc = await db.collection('groups').doc(groupId).get();
+        const g = groupDoc.data();
+        if (g) {
+            if (typeof g.name === 'string' && g.name.trim())
+                groupName = g.name.trim();
+            const m = (_e = g.members) === null || _e === void 0 ? void 0 : _e[ev.actorUid];
+            if (m && typeof m.name === 'string' && m.name.trim())
+                actorName = m.name.trim();
+        }
+    }
+    catch (err) {
+        functions.logger.warn(`[groupEventNotify] read group ${groupId} failed:`, err);
+    }
+    const eventId = context.params.eventId;
+    const names = { groupName, actorName };
+    await Promise.allSettled(recipients.map(async (uid) => {
+        const body = (0, groupNotify_1.buildGroupNotifBody)(ev, uid, names);
+        if (!body)
+            return;
+        const { tokens, notifEnabled, groupNotifEnabled } = await getTokensForUser(uid);
+        if (!notifEnabled || !groupNotifEnabled || tokens.length === 0)
+            return;
+        // Dedup: Firestore trigger giao at-least-once → chống gửi 2 lần.
+        const alertKey = `group_evt_${eventId}`;
+        if (await wasAlertSent(uid, alertKey))
+            return;
+        const user = {
+            userId: uid,
+            tokens,
+            notifEnabled: true,
+            notifTime: '21:00',
+            eventReminderTypes: [1, 6, 24],
+        };
+        const sent = await sendNotificationToUser(user, body.title, body.body, {
+            type: 'group_entry',
+            groupId,
+            url: `/groups/${groupId}`,
+        });
+        if (sent) {
+            await markAlertSent(uid, alertKey);
+        }
+    }));
 });
 //# sourceMappingURL=index.js.map
