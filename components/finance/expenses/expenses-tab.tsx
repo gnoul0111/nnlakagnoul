@@ -11,9 +11,12 @@ import { useMonthData }     from '@/hooks/useAppData'
 import { useCurrentMonth }  from '@/hooks/useCurrentMonth'
 import { useAppend }        from '@/hooks/useAppend'
 import { useToast }         from '@/hooks/useToast'
+import { useAuthStore }     from '@/lib/store/authStore'
 import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { CATEGORIES, isSavingsExpense, isConsumptionExpense, isLinkedExpense, type Expense } from '@/lib/types/expense'
 import { EVENT_TYPES }      from '@/lib/types/events'
+import { isGroupEntryDeleted } from '@/lib/services/groupService'
+import { deleteDebt }       from '@/lib/services/debtService'
 import { formatMoney }      from '@/lib/utils/currency'
 import { formatDateShort, today } from '@/lib/utils/date'
 import { cn }               from '@/lib/utils/cn'
@@ -21,6 +24,7 @@ import { cn }               from '@/lib/utils/cn'
 const catMap = Object.fromEntries(CATEGORIES.map(c => [c.value, c]))
 
 export function ExpensesTab() {
+  const user        = useAuthStore(s => s.user)
   const moneyHidden = useSettingsStore(selectMoneyHidden)
   const { append }  = useAppend()
   const toast       = useToast()
@@ -74,8 +78,30 @@ export function ExpensesTab() {
       return
     }
     if (deleteTarget._groupEntryId) {
-      toast.warning('Khoản từ nhóm — hãy "Hoàn tác" ở tab Nhóm.')
-      setDeleteTarget(null)
+      if (!deleteTarget._groupId) {
+        toast.warning('Khoản từ nhóm — hãy "Hoàn tác" ở tab Nhóm.')
+        setDeleteTarget(null)
+        return
+      }
+      const orphaned = await isGroupEntryDeleted(deleteTarget._groupId, deleteTarget._groupEntryId)
+      if (!orphaned) {
+        toast.warning('Khoản từ nhóm — hãy "Hoàn tác" ở tab Nhóm.')
+        setDeleteTarget(null)
+        return
+      }
+      // Group entry đã bị xoá → khoản bị orphan → dọn dẹp
+      setIsDeleting(true)
+      try {
+        if (deleteTarget._debtId && user) await deleteDebt(user.uid, deleteTarget._debtId)
+        await append(EVENT_TYPES.EXPENSE_DELETED, { id: deleteTarget.id, deletedAt: new Date().toISOString() })
+        toast.success('Đã xóa chi tiêu.')
+        setDeleteTarget(null)
+      } catch (err) {
+        console.error('[expenses] delete orphan failed:', err)
+        toast.error('Không xóa được. Thử lại nhé.')
+      } finally {
+        setIsDeleting(false)
+      }
       return
     }
     setIsDeleting(true)  // FIX: disable nút ngay lập tức
