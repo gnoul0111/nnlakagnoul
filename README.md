@@ -266,6 +266,17 @@ Mọi thao tác write đều `appendEvent()` vào Firestore. State tính lại b
 User action → appendEvent() → Firestore: expense_events → replay() → UI
 ```
 
+### Đồng bộ realtime đa thiết bị
+Dữ liệu tự đồng bộ giữa các thiết bị (desktop ↔ PWA) theo cơ chế lai:
+
+- **Realtime push** — `onSnapshot` listener trên `expense_events` (sổ cá nhân) và `group_events` (nhóm đang mở). Thiết bị khác ghi event → Firestore đẩy về ngay → merge qua đúng pipeline delta cũ (`pruneReplacedOptimistic → mergeEvents → replay`), bọc trong `_syncChain` để không đua với write local.
+- **Re-sync khi quay lại app** — `useVisibilitySync` kéo delta khi tab `focus`/`visible` trở lại (lưới an toàn khi listener rớt; throttle 10s, không polling).
+
+> ⚠️ **Service Worker KHÔNG được cache kênh streaming của Firestore.** `onSnapshot` chạy qua
+> `firestore.googleapis.com/.../Firestore/Listen/channel` (kết nối dài). Nếu SW cache bằng
+> `NetworkFirst` → cắt stream → realtime chết trong PWA. Trong `sw.ts`, các kênh `Listen/Write/channel`
+> được bypass hoàn toàn (`stopImmediatePropagation`); `getDocs` một-phát vẫn cache bình thường.
+
 ### Lưu ý khi phát triển
 
 **Date / Timezone** — không dùng `.toISOString()`, dùng `toLocalDateString()` từ `lib/utils/date.ts`:
