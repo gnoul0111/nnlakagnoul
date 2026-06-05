@@ -200,9 +200,10 @@ export function ExpensesTab() {
                         {formatMoney(expense.amount, moneyHidden)}
                       </span>
                       {isSavings ? (
-                        <div className="w-[60px] shrink-0" />
+                        <div className="w-[88px] shrink-0" />
                       ) : isGroupLinked ? (
                         <>
+                          <div className="w-7 shrink-0" />
                           <button onClick={() => { setEditTarget(expense); setFormOpen(true) }}
                             className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                             aria-label="Sửa">
