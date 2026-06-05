@@ -95,6 +95,7 @@ interface ConfirmModalProps {
   onConfirm: () => void
   title: string
   message?: string
+  warning?: string
   confirmLabel?: string
   cancelLabel?: string
   danger?: boolean
@@ -103,7 +104,7 @@ interface ConfirmModalProps {
 
 export function ConfirmModal({
   open, onClose, onConfirm,
-  title, message,
+  title, message, warning,
   confirmLabel = 'Xác nhận', cancelLabel = 'Hủy',
   danger = false, loading = false,
 }: ConfirmModalProps) {
@@ -114,6 +115,11 @@ export function ConfirmModal({
           <h3 className="font-semibold text-foreground">{title}</h3>
           {message && <p className="mt-1 text-sm text-muted-foreground">{message}</p>}
         </div>
+        {warning && (
+          <div className="rounded-lg bg-warning/10 text-warning text-xs px-3 py-2">
+            {warning}
+          </div>
+        )}
         <div className="flex gap-2 justify-end">
           <button
             onClick={onClose}

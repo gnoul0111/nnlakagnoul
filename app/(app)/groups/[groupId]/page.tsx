@@ -61,18 +61,22 @@ export default function GroupDetailPage() {
 
   const nameOf = (uid: string) => group?.members[uid]?.name ?? 'Thành viên'
 
-  // Tạm tính "ai nợ ai" theo góc nhìn của mình (thông tin, gộp gộp gross, chưa
-  // trừ quyết toán). net > 0 = người ta nợ mình; net < 0 = mình nợ người ta.
+  // Phần chưa xử lý: chỉ tính entries còn 'pending' của từng người.
+  // net > 0 = họ chưa xử lý phần của họ (họ còn nợ anh); net < 0 = anh chưa xử lý (anh còn nợ họ).
   const settlement = useMemo(() => {
     if (!user) return [] as { uid: string; net: number }[]
     const net: Record<string, number> = {}
     for (const e of entries) {
       if (!e.participants.includes(user.uid)) continue
       if (e.payerUid === user.uid) {
-        for (const s of e.splits) if (s.uid !== user.uid) net[s.uid] = (net[s.uid] ?? 0) + s.amount
+        for (const s of e.splits) {
+          if (s.uid !== user.uid && statusOf(e, s.uid) === 'pending')
+            net[s.uid] = (net[s.uid] ?? 0) + s.amount
+        }
       } else {
         const myS = shareOf(e, user.uid)
-        if (myS > 0) net[e.payerUid] = (net[e.payerUid] ?? 0) - myS
+        if (myS > 0 && statusOf(e, user.uid) === 'pending')
+          net[e.payerUid] = (net[e.payerUid] ?? 0) - myS
       }
     }
     return Object.entries(net)
@@ -90,9 +94,20 @@ export default function GroupDetailPage() {
     } catch { toast.error('Không sao chép được.') }
   }
 
+  const deleteWarning = useMemo(() => {
+    if (!deleteTarget || !user) return undefined
+    const pulled = deleteTarget.splits
+      .filter(s => s.uid !== user.uid && statusOf(deleteTarget, s.uid) === 'done')
+      .map(s => nameOf(s.uid))
+    if (!pulled.length) return undefined
+    return `${pulled.join(', ')} đã kéo khoản này vào sổ. Sau khi xoá, họ cần tự xoá trong Tài chính.`
+  }, [deleteTarget, user, group]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleDelete = async () => {
     if (!user || !deleteTarget) return
     try {
+      const linked = findLinkedExpense(deleteTarget.id, expenses)
+      if (linked) await undoPull(user.uid, deleteTarget, linked)
       await deleteGroupEntry(user.uid, deleteTarget)
       await refreshEntries(user.uid)
       setDeleteTarget(null)
@@ -150,7 +165,7 @@ export default function GroupDetailPage() {
       {/* Tạm tính chia tiền (thông tin) */}
       {settlement.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Tạm tính chia tiền</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Phần chưa xử lý</p>
           <div className="space-y-1.5">
             {settlement.map(({ uid, net }) => (
               <div key={uid} className="flex items-center justify-between text-sm">
@@ -163,7 +178,7 @@ export default function GroupDetailPage() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2">Số tạm tính từ các khoản, chưa trừ tiền đã trả nhau.</p>
+          <p className="text-[10px] text-muted-foreground mt-2">Chỉ tính các khoản bạn hoặc họ chưa xử lý.</p>
         </div>
       )}
 
@@ -335,6 +350,7 @@ export default function GroupDetailPage() {
         onConfirm={handleDelete}
         title="Xóa khoản chung này?"
         message={deleteTarget ? `${deleteTarget.note || 'Khoản chung'} · ${formatMoney(deleteTarget.total, false)}` : ''}
+        warning={deleteWarning}
         confirmLabel="Xóa"
         danger
       />
