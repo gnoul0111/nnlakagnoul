@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import Link from 'next/link'
 import {
   Eye, EyeOff, TrendingUp, TrendingDown, Wallet,
@@ -32,6 +33,7 @@ interface SecondaryCardData {
   value:       number
   target:      number
   progressPct: number
+  subtitle?:   string
 }
 
 interface StatsGridProps {
@@ -39,6 +41,7 @@ interface StatsGridProps {
   cards:          SecondaryCardData[]
   moneyHidden:    boolean
   onToggleHidden: () => void
+  budgetSlot?:    React.ReactNode
 }
 
 // ─── Trend line (% so với tháng trước) ─────────────────────────────────────────
@@ -60,7 +63,7 @@ function TrendLine({ pct, goodWhenUp }: { pct: number | null; goodWhenUp: boolea
 
 // ─── StatsGrid ────────────────────────────────────────────────────────────────
 
-export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden }: StatsGridProps) {
+export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden, budgetSlot }: StatsGridProps) {
   const heroItems = [
     { key: 'income',      label: 'Tổng thu', Icon: TrendingUp,   ring: 'bg-success/15',     iconColor: 'text-success',
       value: hero.income,      valueColor: 'text-success',     trend: hero.incomeTrend,      goodWhenUp: true },
@@ -136,9 +139,12 @@ export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden }: StatsGri
         </div>
       </div>
 
+      {/* ─── Budget slot (inject từ parent) ──────────────────────────────────────── */}
+      {budgetSlot}
+
       {/* ─── Thẻ phụ (bật/tắt qua Tùy chỉnh) ───────────────────────────────────── */}
       {cards.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {cards.map(c => {
             const Icon = c.icon
             return (
@@ -160,7 +166,7 @@ export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden }: StatsGri
                   <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                 </div>
 
-                {c.target > 0 && (
+                {c.target > 0 ? (
                   <>
                     <div className="mt-3 flex items-center justify-between text-[11px]">
                       <span className="text-muted-foreground truncate">
@@ -177,7 +183,9 @@ export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden }: StatsGri
                       />
                     </div>
                   </>
-                )}
+                ) : c.subtitle ? (
+                  <p className="mt-2 text-[11px] text-muted-foreground">{c.subtitle}</p>
+                ) : null}
               </Link>
             )
           })}
