@@ -23,7 +23,11 @@ export function RecentExpenses({ expenses, moneyHidden }: RecentExpensesProps) {
 
   // Sắp xếp gần nhất lên đầu, lấy MAX_SHOW
   const sorted = [...expenses]
-    .sort((a, b) => b.date.localeCompare(a.date))
+    .sort((a, b) => {
+      const dateCmp = b.date.localeCompare(a.date)
+      if (dateCmp !== 0) return dateCmp
+      return (b._updatedClientTimestamp ?? '').localeCompare(a._updatedClientTimestamp ?? '')
+    })
     .slice(0, MAX_SHOW)
 
   return (

@@ -247,36 +247,40 @@ export function PreferencesTab() {
         </Row>
       </Section>
 
-      {/* ── Lịch & Tiền lương ────────────────────────────────────────────────── */}
-      <SectionHeader title="Lịch & Tiền lương" />
-      <Section>
-        <Row className="flex items-center justify-between">
-          <p className="text-sm font-medium text-foreground">Tuần bắt đầu từ</p>
-          <div className="flex bg-muted rounded-xl p-1 gap-1">
-            {([{ value: 'monday', label: 'Thứ 2' }, { value: 'sunday', label: 'Chủ nhật' }] as const).map(opt => (
-              <button key={opt.value} onClick={() => handleWeekStart(opt.value)} disabled={saving === 'weekStart'}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  settings.weekStartDay === opt.value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </Row>
-        <Row className="flex items-center justify-between gap-4">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-foreground">Ngày nhận lương</p>
-            <p className="text-xs text-muted-foreground mt-0.5">0 = không đặt, 1–31</p>
-          </div>
-          <input type="number" min={0} max={31} value={settings.salaryDay}
-            onChange={e => updateSettings(user.uid, { salaryDay: Math.min(31, Math.max(0, parseInt(e.target.value) || 0)) })}
-            onBlur={e => save('salary', () => updateSettings(user.uid, { salaryDay: parseInt(e.target.value) || 0 }))}
-            className="w-16 h-9 rounded-lg border border-input bg-background text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </Row>
-      </Section>
+      {/* ── Lịch & Tiền lương — ẩn vì chưa kết nối vào logic ───────────────── */}
+      {false && (
+        <>
+          <SectionHeader title="Lịch & Tiền lương" />
+          <Section>
+            <Row className="flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">Tuần bắt đầu từ</p>
+              <div className="flex bg-muted rounded-xl p-1 gap-1">
+                {([{ value: 'monday', label: 'Thứ 2' }, { value: 'sunday', label: 'Chủ nhật' }] as const).map(opt => (
+                  <button key={opt.value} onClick={() => handleWeekStart(opt.value)} disabled={saving === 'weekStart'}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                      settings.weekStartDay === opt.value ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </Row>
+            <Row className="flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">Ngày nhận lương</p>
+                <p className="text-xs text-muted-foreground mt-0.5">0 = không đặt, 1–31</p>
+              </div>
+              <input type="number" min={0} max={31} value={settings.salaryDay}
+                onChange={e => updateSettings(user.uid, { salaryDay: Math.min(31, Math.max(0, parseInt(e.target.value) || 0)) })}
+                onBlur={e => save('salary', () => updateSettings(user.uid, { salaryDay: parseInt(e.target.value) || 0 }))}
+                className="w-16 h-9 rounded-lg border border-input bg-background text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </Row>
+          </Section>
+        </>
+      )}
 
       {/* ── Danh mục ─────────────────────────────────────────────────────────── */}
       <SectionHeader title="Danh mục hiển thị" />

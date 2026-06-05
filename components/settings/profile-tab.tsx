@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Camera, Pencil, LogOut, X, Check, KeyRound } from 'lucide-react'
+import { Camera, Pencil, LogOut, KeyRound } from 'lucide-react'
 import { Avatar }                  from '@/components/ui/avatar'
 import { Button }                  from '@/components/ui/button'
 import { FormField, Input, PasswordInput } from '@/components/ui/input'
@@ -224,18 +224,20 @@ export function ProfileTab() {
         </SectionRow>
       </Section>
 
-      {/* Security */}
-      <Section>
-        <SectionRow>
-          <button
-            onClick={() => setChangePassOpen(true)}
-            className="flex items-center gap-3 w-full"
-          >
-            <KeyRound className="w-5 h-5 text-muted-foreground shrink-0" />
-            <span className="text-sm font-medium text-foreground">Đổi mật khẩu</span>
-          </button>
-        </SectionRow>
-      </Section>
+      {/* Security — ẩn vì app dùng Google Sign-In, không có password */}
+      {false && (
+        <Section>
+          <SectionRow>
+            <button
+              onClick={() => setChangePassOpen(true)}
+              className="flex items-center gap-3 w-full"
+            >
+              <KeyRound className="w-5 h-5 text-muted-foreground shrink-0" />
+              <span className="text-sm font-medium text-foreground">Đổi mật khẩu</span>
+            </button>
+          </SectionRow>
+        </Section>
+      )}
 
       {/* Logout */}
       <Section>
@@ -271,36 +273,39 @@ export function ProfileTab() {
         </form>
       </Modal>
 
-      {/* ── Change password modal ─────────────────────────────────────────────── */}
-      <Modal variant="center" open={changePassOpen} onClose={() => setChangePassOpen(false)} title="Đổi mật khẩu">
-        <form onSubmit={passForm.handleSubmit(onSavePassword)} className="p-4 space-y-4">
-          <FormField
-            label="Mật khẩu hiện tại"
-            error={passForm.formState.errors.currentPassword?.message}
-            required
-          >
-            <PasswordInput {...passForm.register('currentPassword')} autoFocus />
-          </FormField>
-          <FormField
-            label="Mật khẩu mới"
-            error={passForm.formState.errors.newPassword?.message}
-            required
-          >
-            <PasswordInput {...passForm.register('newPassword')} />
-          </FormField>
-          <FormField
-            label="Xác nhận mật khẩu mới"
-            error={passForm.formState.errors.confirmPassword?.message}
-            required
-          >
-            <PasswordInput {...passForm.register('confirmPassword')} />
-          </FormField>
-          <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" onClick={() => setChangePassOpen(false)}>Hủy</Button>
-            <Button type="submit" loading={savingPass}>Đổi mật khẩu</Button>
-          </div>
-        </form>
-      </Modal>
+      {/* ── Change password modal — ẩn cùng với button ───────────────────────── */}
+      {false && (
+        <Modal variant="center" open={changePassOpen} onClose={() => setChangePassOpen(false)} title="Đổi mật khẩu">
+          <form onSubmit={passForm.handleSubmit(onSavePassword)} className="p-4 space-y-4">
+            <FormField
+              label="Mật khẩu hiện tại"
+              error={passForm.formState.errors.currentPassword?.message}
+              required
+            >
+              <PasswordInput {...passForm.register('currentPassword')} autoFocus />
+            </FormField>
+            <FormField
+              label="Mật khẩu mới"
+              error={passForm.formState.errors.newPassword?.message}
+              required
+            >
+              <PasswordInput {...passForm.register('newPassword')} />
+            </FormField>
+            <FormField
+              label="Xác nhận mật khẩu mới"
+              error={passForm.formState.errors.confirmPassword?.message}
+              required
+            >
+              <PasswordInput {...passForm.register('confirmPassword')} />
+            </FormField>
+            <div className="flex gap-2 justify-end">
+              <Button type="button" variant="outline" onClick={() => setChangePassOpen(false)}>Hủy</Button>
+              <Button type="submit" loading={savingPass}>Đổi mật khẩu</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
     </div>
   )
 }

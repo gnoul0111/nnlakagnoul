@@ -177,6 +177,7 @@ export default function CalendarPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
+    <>
     <div className="flex flex-col h-full overflow-hidden animate-fade-in">
       {/* Sticky header */}
       <CalendarHeader
@@ -272,6 +273,8 @@ export default function CalendarPage() {
         </div>
       )}
 
+    </div>
+
       {/* FAB — thiết kế giống Dashboard FAB: expand → sub-button Chi tiêu / Sự kiện */}
       {fabExpanded && (
         <div
@@ -333,6 +336,6 @@ export default function CalendarPage() {
         message={`Bạn có chắc muốn xóa "${deleteTarget?.title}"?`}
         confirmLabel="Xóa" danger loading={deleting}
       />
-    </div>
+    </>
   )
 }
