@@ -83,7 +83,7 @@ export function ExpensesTab() {
         setDeleteTarget(null)
         return
       }
-      const orphaned = await isGroupEntryDeleted(deleteTarget._groupId, deleteTarget._groupEntryId)
+      const orphaned = await isGroupEntryDeleted(deleteTarget._groupId, deleteTarget._groupEntryId, user!.uid)
       if (!orphaned) {
         toast.warning('Khoản từ nhóm — hãy "Hoàn tác" ở tab Nhóm.')
         setDeleteTarget(null)
