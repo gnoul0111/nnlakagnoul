@@ -71,8 +71,12 @@ describe('getGroupRecipients', () => {
     }))).toEqual([])
   })
 
-  test('DELETED / loại khác → không báo', () => {
-    expect(getGroupRecipients(ev({ eventType: 'GROUP_ENTRY_DELETED' }))).toEqual([])
+  test('DELETED → mọi participant trừ người xoá', () => {
+    expect(getGroupRecipients(ev({ eventType: 'GROUP_ENTRY_DELETED', actorUid: 'B' })))
+      .toEqual(['A', 'C'])
+  })
+
+  test('loại khác → không báo', () => {
     expect(getGroupRecipients(ev({ eventType: 'WHATEVER' }))).toEqual([])
   })
 })
@@ -120,7 +124,15 @@ describe('buildGroupNotifBody', () => {
     expect(out?.body).toBe('An đã xử lý phần của họ trong «Đi chợ»')
   })
 
+  test('DELETED → câu báo xoá', () => {
+    const out = buildGroupNotifBody(
+      ev({ eventType: 'GROUP_ENTRY_DELETED', data: { note: 'Đi chợ' } }),
+      'B', names, fmt,
+    )
+    expect(out?.body).toBe('An đã xoá khoản «Đi chợ»')
+  })
+
   test('loại không hỗ trợ → null', () => {
-    expect(buildGroupNotifBody(ev({ eventType: 'GROUP_ENTRY_DELETED' }), 'B', names, fmt)).toBeNull()
+    expect(buildGroupNotifBody(ev({ eventType: 'WHATEVER' }), 'B', names, fmt)).toBeNull()
   })
 })

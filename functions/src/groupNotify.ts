@@ -37,9 +37,10 @@ export function formatVND(n: number): string {
  *  • GROUP_ENTRY_UPDATED → mọi participant trừ người sửa, NHƯNG bỏ qua nếu
  *    data.notifyFinancial === false (chỉ sửa note/ngày → không báo). Thiếu field
  *    (client cũ) → coi như có thay đổi → vẫn báo.
+ *  • GROUP_ENTRY_DELETED → mọi participant trừ người xoá.
  *  • GROUP_ENTRY_STATUS_SET → CHỈ báo người trả (payerUid) khi status === 'done'
  *    và payer ≠ người bấm. Thiếu payerUid (client cũ) → không báo.
- *  • Loại khác (DELETED, ...) → không báo.
+ *  • Loại khác → không báo.
  */
 export function getGroupRecipients(ev: GroupEventLike): string[] {
   const type = String(ev.eventType).toUpperCase()
@@ -47,7 +48,7 @@ export function getGroupRecipients(ev: GroupEventLike): string[] {
   const participants = Array.isArray(ev.participants) ? ev.participants : []
   const data = ev.data ?? {}
 
-  if (type === 'GROUP_ENTRY_ADDED') {
+  if (type === 'GROUP_ENTRY_ADDED' || type === 'GROUP_ENTRY_DELETED') {
     return participants.filter(uid => uid !== actor)
   }
 
@@ -90,6 +91,10 @@ export function buildGroupNotifBody(
       ? ` · phần của bạn ${fmtMoney(myShare)}`
       : ''
     return { title, body: `${names.actorName} ${verb} khoản «${note}»${shareStr}` }
+  }
+
+  if (type === 'GROUP_ENTRY_DELETED') {
+    return { title, body: `${names.actorName} đã xoá khoản «${note}»` }
   }
 
   if (type === 'GROUP_ENTRY_STATUS_SET') {
