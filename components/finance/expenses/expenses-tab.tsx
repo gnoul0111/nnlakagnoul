@@ -208,10 +208,12 @@ export function ExpensesTab() {
                             aria-label="Sửa">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
-                          <span className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50"
-                            title='Khoản từ nhóm — gỡ bằng "Hoàn tác" ở tab Nhóm'>
+                          <button onClick={() => setDeleteTarget(expense)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:bg-muted hover:text-muted-foreground transition-colors"
+                            title='Khoản từ nhóm — gỡ bằng "Hoàn tác" ở tab Nhóm'
+                            aria-label="Xóa">
                             <Lock className="w-3.5 h-3.5" />
-                          </span>
+                          </button>
                         </>
                       ) : (
                         <>
