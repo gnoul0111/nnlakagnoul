@@ -36,7 +36,16 @@
       "Bash(git checkout *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git fetch *)",
+      "Bash(firebase functions:log --only groupEventNotify --project nnlakagnoul)",
+      "Bash(git merge *)",
+      "Bash(gcloud logging *)",
+      "PowerShell(Get-Command gcloud -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command firebase -ErrorAction SilentlyContinue)",
+      "Bash(npm run *)",
+      "Bash(npx jest *)",
+      "Bash(firebase deploy *)"
     ]
   }
 }
