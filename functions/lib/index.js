@@ -33,12 +33,13 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cleanupNotifData = exports.sendTestNotification = exports.notifyNewVersion = exports.budgetAlertOnExpense = exports.calendarEventReminder = exports.debtDueReminder = exports.dailyExpenseReminder = void 0;
+exports.groupDeletedNotify = exports.groupMemberJoinedNotify = exports.groupEventNotify = exports.cleanupNotifData = exports.sendTestNotification = exports.notifyNewVersion = exports.budgetAlertOnExpense = exports.calendarEventReminder = exports.debtDueReminder = exports.dailyExpenseReminder = void 0;
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions"));
 const params_1 = require("firebase-functions/params");
 const messaging_1 = require("firebase-admin/messaging");
 const firestore_1 = require("firebase-admin/firestore");
+const groupNotify_1 = require("./groupNotify");
 // ─── Secrets ──────────────────────────────────────────────────────────────────
 // Thay thế functions.config() (đã deprecated). Set bằng:
 //   firebase functions:secrets:set NOTIFY_SECRET
@@ -46,6 +47,8 @@ const notifySecret = (0, params_1.defineSecret)('NOTIFY_SECRET');
 // ─── Init ─────────────────────────────────────────────────────────────────────
 admin.initializeApp();
 const db = (0, firestore_1.getFirestore)();
+// In-memory rate limit store cho notifyNewVersion endpoint
+const ipRateLimitStore = new Map();
 // ─── Timezone ─────────────────────────────────────────────────────────────────
 const TZ = 'Asia/Ho_Chi_Minh';
 /** Lấy giờ địa phương theo múi giờ Việt Nam dạng "HH:mm" */
@@ -642,9 +645,10 @@ exports.notifyNewVersion = functions
     .region('asia-southeast1')
     .runWith({ secrets: [notifySecret] })
     .https.onRequest(async (req, res) => {
-    var _a, _b, _c, _d, _e, _f, _g;
-    // CORS cho manual trigger từ browser nếu cần
-    res.set('Access-Control-Allow-Origin', '*');
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
+    // CORS chỉ cho phép app domain — không dùng wildcard (*)
+    const allowedOrigin = (_a = process.env.APP_ORIGIN) !== null && _a !== void 0 ? _a : 'https://expense-app-tau-six.vercel.app';
+    res.set('Access-Control-Allow-Origin', allowedOrigin);
     res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.set('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') {
@@ -655,6 +659,23 @@ exports.notifyNewVersion = functions
         res.status(405).json({ error: 'Method not allowed' });
         return;
     }
+    // Rate limit theo IP: tối đa 10 lần/giờ — ngăn brute force secret
+    const ip = (_f = (_d = (_c = (_b = req.headers['x-forwarded-for']) === null || _b === void 0 ? void 0 : _b.split(',')[0]) === null || _c === void 0 ? void 0 : _c.trim()) !== null && _d !== void 0 ? _d : (_e = req.socket) === null || _e === void 0 ? void 0 : _e.remoteAddress) !== null && _f !== void 0 ? _f : 'unknown';
+    const rateLimitKey = `notifyNewVersion:${ip}`;
+    const now = Date.now();
+    const WINDOW_MS = 60 * 60 * 1000; // 1 giờ
+    const MAX_ATTEMPTS = 10;
+    const entry = ipRateLimitStore.get(rateLimitKey);
+    if (entry && now < entry.windowEnd) {
+        if (entry.count >= MAX_ATTEMPTS) {
+            res.status(429).json({ error: 'Too many requests' });
+            return;
+        }
+        entry.count++;
+    }
+    else {
+        ipRateLimitStore.set(rateLimitKey, { count: 1, windowEnd: now + WINDOW_MS });
+    }
     // Xác thực qua secret — tránh kẻ lạ gọi API này gửi spam
     const expectedSecret = notifySecret.value();
     if (!expectedSecret) {
@@ -662,15 +683,15 @@ exports.notifyNewVersion = functions
         res.status(500).json({ error: 'Server not configured' });
         return;
     }
-    const providedSecret = (_b = (_a = req.body) === null || _a === void 0 ? void 0 : _a.secret) !== null && _b !== void 0 ? _b : (_c = req.query) === null || _c === void 0 ? void 0 : _c.secret;
+    const providedSecret = (_h = (_g = req.body) === null || _g === void 0 ? void 0 : _g.secret) !== null && _h !== void 0 ? _h : (_j = req.query) === null || _j === void 0 ? void 0 : _j.secret;
     if (providedSecret !== expectedSecret) {
         functions.logger.warn('[notifyNewVersion] Secret không đúng');
         res.status(401).json({ error: 'Unauthorized' });
         return;
     }
     // Có thể truyền optional version/buildNumber từ CI
-    const version = String((_e = (_d = req.body) === null || _d === void 0 ? void 0 : _d.version) !== null && _e !== void 0 ? _e : '').slice(0, 50);
-    const buildNumber = String((_g = (_f = req.body) === null || _f === void 0 ? void 0 : _f.buildNumber) !== null && _g !== void 0 ? _g : '').slice(0, 20);
+    const version = String((_l = (_k = req.body) === null || _k === void 0 ? void 0 : _k.version) !== null && _l !== void 0 ? _l : '').slice(0, 50);
+    const buildNumber = String((_o = (_m = req.body) === null || _m === void 0 ? void 0 : _m.buildNumber) !== null && _o !== void 0 ? _o : '').slice(0, 20);
     try {
         const users = await getNotifUsers();
         functions.logger.info(`[notifyNewVersion] Broadcasting to ${users.length} users`);
@@ -814,5 +835,187 @@ exports.cleanupNotifData = functions
     }
     functions.logger.info(`[cleanupNotifData] Deleted ${alertsDeleted} alert logs + ${tokensDeleted} stale tokens`);
     return null;
+});
+// ─── FUNCTION 8, 9, 10: Thông báo nhóm ──────────────────────────────────────
+//
+//  8. groupEventNotify   — onCreate group_events: thêm/sửa/xoá/status khoản
+//  9. groupMemberJoinedNotify — onUpdate groups: thành viên mới vào nhóm
+// 10. groupDeletedNotify — onDelete groups: chủ nhóm xoá nhóm
+/** Helper: gửi thông báo nhóm cho danh sách uid (tái dùng cho join + delete). */
+async function notifyGroupMembers(recipientUids, title, body, alertKeyFn, fcmData) {
+    await Promise.allSettled(recipientUids.map(async (uid) => {
+        const { tokens, notifEnabled, groupNotifEnabled } = await getTokensForUser(uid);
+        if (!notifEnabled || !groupNotifEnabled || tokens.length === 0)
+            return;
+        const alertKey = alertKeyFn(uid);
+        if (await wasAlertSent(uid, alertKey))
+            return;
+        const user = {
+            userId: uid, tokens, notifEnabled: true, notifTime: '21:00', eventReminderTypes: [],
+        };
+        const sent = await sendNotificationToUser(user, title, body, fcmData);
+        if (sent)
+            await markAlertSent(uid, alertKey);
+    }));
+}
+// Logic chọn người nhận + soạn nội dung nằm ở ./groupNotify (thuần, unit-test).
+// Function này chỉ lo I/O Firestore + gửi FCM (tái dùng sendNotificationToUser).
+/** Gom tokens của 1 user (legacy field + subcollection). Trả [] nếu không có. */
+async function getTokensForUser(userId) {
+    var _a;
+    const settingsDoc = await db.collection('user_settings').doc(userId).get();
+    if (!settingsDoc.exists)
+        return { tokens: [], notifEnabled: false, groupNotifEnabled: false };
+    const data = settingsDoc.data();
+    const tokens = [];
+    const seen = new Set();
+    if (data.fcmToken && typeof data.fcmToken === 'string') {
+        tokens.push({ token: data.fcmToken, docRef: null });
+        seen.add(data.fcmToken);
+    }
+    try {
+        const tokensSnap = await settingsDoc.ref.collection('fcm_tokens').get();
+        for (const tokenDoc of tokensSnap.docs) {
+            const t = (_a = tokenDoc.data()) === null || _a === void 0 ? void 0 : _a.token;
+            if (typeof t === 'string' && !seen.has(t)) {
+                tokens.push({ token: t, docRef: tokenDoc.ref });
+                seen.add(t);
+            }
+        }
+    }
+    catch ( /* no-op: subcollection chưa tồn tại */_b) { /* no-op: subcollection chưa tồn tại */ }
+    return {
+        tokens,
+        notifEnabled: !!data.notifEnabled,
+        // Mặc định true: user cũ chưa có field này vẫn nhận thông báo nhóm.
+        groupNotifEnabled: data.groupNotifEnabled !== false,
+    };
+}
+exports.groupEventNotify = functions
+    .region('asia-southeast1')
+    .firestore.document('group_events/{eventId}')
+    .onCreate(async (snap, context) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    const raw = snap.data();
+    if (!raw)
+        return;
+    const ev = {
+        eventType: String((_a = raw.eventType) !== null && _a !== void 0 ? _a : ''),
+        actorUid: String((_b = raw.actorUid) !== null && _b !== void 0 ? _b : ''),
+        participants: Array.isArray(raw.participants) ? raw.participants : [],
+        data: ((_c = raw.data) !== null && _c !== void 0 ? _c : {}),
+    };
+    const recipients = (0, groupNotify_1.getGroupRecipients)(ev);
+    // Log chẩn đoán: vì sao có / không có người nhận (đặc biệt STATUS_SET).
+    functions.logger.warn(`[groupEventNotify] type=${ev.eventType} actor=${ev.actorUid} ` +
+        `status=${String((_e = (_d = ev.data) === null || _d === void 0 ? void 0 : _d.status) !== null && _e !== void 0 ? _e : '-')} hasPayerUid=${!!((_f = ev.data) === null || _f === void 0 ? void 0 : _f.payerUid)} ` +
+        `participants=${ev.participants.length} recipients=${recipients.length}`);
+    if (recipients.length === 0)
+        return;
+    const groupId = String((_g = raw.groupId) !== null && _g !== void 0 ? _g : '');
+    if (!groupId)
+        return;
+    // Lấy tên nhóm + tên người thực hiện (1 read). Fallback nếu thiếu.
+    let groupName = 'Nhóm';
+    let actorName = 'Thành viên';
+    try {
+        const groupDoc = await db.collection('groups').doc(groupId).get();
+        const g = groupDoc.data();
+        if (g) {
+            if (typeof g.name === 'string' && g.name.trim())
+                groupName = g.name.trim();
+            const m = (_h = g.members) === null || _h === void 0 ? void 0 : _h[ev.actorUid];
+            if (m && typeof m.name === 'string' && m.name.trim())
+                actorName = m.name.trim();
+        }
+    }
+    catch (err) {
+        functions.logger.warn(`[groupEventNotify] read group ${groupId} failed:`, err);
+    }
+    const eventId = context.params.eventId;
+    const names = { groupName, actorName };
+    await Promise.allSettled(recipients.map(async (uid) => {
+        const body = (0, groupNotify_1.buildGroupNotifBody)(ev, uid, names);
+        if (!body)
+            return;
+        const { tokens, notifEnabled, groupNotifEnabled } = await getTokensForUser(uid);
+        if (!notifEnabled || !groupNotifEnabled || tokens.length === 0) {
+            functions.logger.warn(`[groupEventNotify] skip ${uid}: notifEnabled=${notifEnabled} ` +
+                `groupNotif=${groupNotifEnabled} tokens=${tokens.length}`);
+            return;
+        }
+        // Dedup: Firestore trigger giao at-least-once → chống gửi 2 lần.
+        const alertKey = `group_evt_${eventId}`;
+        if (await wasAlertSent(uid, alertKey))
+            return;
+        const user = {
+            userId: uid,
+            tokens,
+            notifEnabled: true,
+            notifTime: '21:00',
+            eventReminderTypes: [1, 6, 24],
+        };
+        const sent = await sendNotificationToUser(user, body.title, body.body, {
+            type: 'group_entry',
+            groupId,
+            url: `/groups/${groupId}`,
+        });
+        functions.logger.info(`[groupEventNotify] sent=${sent} to ${uid} (${tokens.length} tokens)`);
+        if (sent) {
+            await markAlertSent(uid, alertKey);
+        }
+    }));
+});
+// ─── FUNCTION 9: Thành viên mới vào nhóm ─────────────────────────────────────
+exports.groupMemberJoinedNotify = functions
+    .region('asia-southeast1')
+    .firestore.document('groups/{groupId}')
+    .onUpdate(async (change, context) => {
+    var _a;
+    const before = change.before.data();
+    const after = change.after.data();
+    if (!before || !after)
+        return;
+    const beforeUids = Array.isArray(before.memberUids) ? before.memberUids : [];
+    const afterUids = Array.isArray(after.memberUids) ? after.memberUids : [];
+    // Chỉ xử lý khi có uid mới xuất hiện (bỏ qua đổi tên nhóm, gỡ thành viên...)
+    const newUids = afterUids.filter(uid => !beforeUids.includes(uid));
+    if (newUids.length === 0)
+        return;
+    const groupId = context.params.groupId;
+    const groupName = typeof after.name === 'string' ? after.name.trim() || 'Nhóm' : 'Nhóm';
+    for (const newUid of newUids) {
+        const memberInfo = (_a = after.members) === null || _a === void 0 ? void 0 : _a[newUid];
+        const newName = typeof (memberInfo === null || memberInfo === void 0 ? void 0 : memberInfo.name) === 'string'
+            ? memberInfo.name.trim() || 'Thành viên'
+            : 'Thành viên';
+        // Báo tất cả thành viên CŨ (không bao gồm người vừa vào)
+        const recipients = beforeUids.filter(uid => uid !== newUid);
+        if (recipients.length === 0)
+            continue;
+        functions.logger.warn(`[groupMemberJoinedNotify] groupId=${groupId} newMember=${newUid} recipients=${recipients.length}`);
+        await notifyGroupMembers(recipients, `👥 ${groupName}`, `${newName} vừa tham gia nhóm`, _uid => `group_joined_${groupId}_${newUid}`, { type: 'group_member_joined', groupId, url: `/groups/${groupId}` });
+    }
+});
+// ─── FUNCTION 10: Chủ nhóm xoá nhóm ─────────────────────────────────────────
+exports.groupDeletedNotify = functions
+    .region('asia-southeast1')
+    .firestore.document('groups/{groupId}')
+    .onDelete(async (snap, context) => {
+    var _a, _b;
+    const data = snap.data();
+    if (!data)
+        return;
+    const memberUids = Array.isArray(data.memberUids) ? data.memberUids : [];
+    if (memberUids.length === 0)
+        return;
+    const groupId = context.params.groupId;
+    const groupName = typeof data.name === 'string' ? data.name.trim() || 'Nhóm' : 'Nhóm';
+    const ownerUid = typeof data.ownerUid === 'string' ? data.ownerUid : '';
+    const ownerName = typeof ((_b = (_a = data.members) === null || _a === void 0 ? void 0 : _a[ownerUid]) === null || _b === void 0 ? void 0 : _b.name) === 'string'
+        ? data.members[ownerUid].name.trim() || 'Chủ nhóm'
+        : 'Chủ nhóm';
+    functions.logger.warn(`[groupDeletedNotify] groupId=${groupId} groupName=${groupName} members=${memberUids.length}`);
+    await notifyGroupMembers(memberUids, `👥 ${groupName}`, `${ownerName} đã xoá nhóm này`, _uid => `group_deleted_${groupId}`, { type: 'group_deleted', groupId, url: '/groups' });
 });
 //# sourceMappingURL=index.js.map

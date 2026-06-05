@@ -39,6 +39,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Chỉ chủ nhóm được xoá nhóm.' }, { status: 403 })
     }
 
+    // Lưu member list trước khi xoá để unlink expense/debt sau đó.
+    const memberUids: string[] = Array.isArray(snap.data()!.memberUids)
+      ? snap.data()!.memberUids as string[]
+      : []
+
     // Cascade: xoá hết group_events theo từng batch
     const col = db.collection('group_events').where('groupId', '==', groupId)
     // eslint-disable-next-line no-constant-condition
@@ -52,6 +57,30 @@ export async function POST(request: NextRequest) {
     }
 
     await ref.delete()
+
+    // Unlink expense + debt của từng thành viên khỏi nhóm đã xoá.
+    // Nếu không làm, các bút toán cá nhân có _groupEntryId sẽ bị khoá vĩnh viễn:
+    // tab Chi tiêu block xoá (icon 🔒), tab Nhóm không còn nhóm để "Hoàn tác".
+    await Promise.allSettled(memberUids.map(async memberUid => {
+      const eventsSnap = await db.collection('expense_events')
+        .where('userId', '==', memberUid)
+        .get()
+
+      const toUnlink = eventsSnap.docs.filter(
+        d => d.data()?.data?._groupId === groupId,
+      )
+      if (toUnlink.length === 0) return
+
+      const unlinkBatch = db.batch()
+      toUnlink.forEach(d => {
+        unlinkBatch.update(d.ref, {
+          'data._groupId':      null,
+          'data._groupEntryId': null,
+        })
+      })
+      await unlinkBatch.commit()
+    }))
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     logger.error('group-delete', 'Unhandled error', err)

@@ -13,6 +13,7 @@ export function defaultSettings(userId: string): UserSettings {
     salaryDay: 0,
     moneyHidden: false,
     notifEnabled: false,
+    groupNotifEnabled: true,
     notifTime: '21:00',
     eventReminderTypes: [1],
     fcmToken: null,
@@ -25,7 +26,9 @@ export function defaultSettings(userId: string): UserSettings {
 
 export async function getUserSettings(userId: string): Promise<UserSettings> {
   const snap = await getDocument<UserSettings>(COLLECTIONS.USER_SETTINGS, userId)
-  return snap ?? defaultSettings(userId)
+  // Merge với default: doc cũ có thể thiếu field (moneyHidden, groupNotifEnabled...)
+  // → đảm bảo luôn đủ field, tránh undefined lan xuống UI/localStorage.
+  return snap ? { ...defaultSettings(userId), ...snap } : defaultSettings(userId)
 }
 
 export async function updateUserSettings(

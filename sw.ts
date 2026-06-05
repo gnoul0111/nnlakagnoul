@@ -12,6 +12,14 @@ import type { PrecacheEntry, SerwistGlobalConfig }  from 'serwist'
 // xu ly -> khong respondWith -> browser tu fetch native (cach duy nhat chay dung).
 const AUTH_PASSTHROUGH = /^https:\/\/(apis\.google\.com|accounts\.google\.com|www\.google\.com|[^/]+\.firebaseapp\.com|identitytoolkit\.googleapis\.com|securetoken\.googleapis\.com)\//i
 
+// FIX REALTIME: kênh streaming dài của Firestore (onSnapshot listener + writes)
+// dùng WebChannel tại .../Firestore/Listen/channel và .../Write/channel.
+// NetworkFirst (cache + timeout 10s) ở runtimeCaching bên dưới sẽ cắt đứt kênh
+// streaming → realtime không chạy trong PWA. Phải BỎ QUA HOÀN TOÀN (như auth):
+// stopImmediatePropagation → browser fetch native → WebChannel chạy đúng.
+// CHỈ nhắm /channel streaming — getDocs một-phát vẫn qua NetworkFirst (giữ cache offline).
+const FIRESTORE_STREAM_PASSTHROUGH = /^https:\/\/firestore\.googleapis\.com\/.*\/(Listen|Write)\/channel/i
+
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
     __SW_MANIFEST: (PrecacheEntry | string)[] | undefined
@@ -108,11 +116,26 @@ const serwist = new Serwist({
   ],
 })
 
+// Suppress Serwist's internal "no-response" unhandled rejection — xảy ra khi
+// navigation request đua với SW activation (skipWaiting+clientsClaim); app vẫn
+// load đúng nhưng Serwist log lỗi thừa trước khi handlerDidError chạy kịp.
+self.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+  const msg: string = (event.reason as { message?: string })?.message ?? ''
+  if (msg.startsWith('no-response:')) event.preventDefault()
+})
+
 // PHẢI đăng ký TRƯỚC serwist.addEventListeners(): với request auth của Firebase,
 // gọi stopImmediatePropagation() → listener fetch của Serwist (đăng ký sau) không
 // chạy → không respondWith → trình duyệt tự fetch native (auth chạy đúng).
 self.addEventListener('fetch', (event: FetchEvent) => {
-  if (AUTH_PASSTHROUGH.test(event.request.url)) {
+  const url = new URL(event.request.url)
+  // Bỏ qua: (1) các origin auth của Google/Firebase; (2) path same-origin /__/auth,
+  // /__/firebase (auth handler/iframe được proxy về app domain — KHÔNG được cache).
+  if (
+    AUTH_PASSTHROUGH.test(event.request.url) ||
+    FIRESTORE_STREAM_PASSTHROUGH.test(event.request.url) ||
+    url.pathname.startsWith('/__/')
+  ) {
     event.stopImmediatePropagation()
   }
 })

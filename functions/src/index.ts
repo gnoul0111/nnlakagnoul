@@ -3,14 +3,16 @@ import * as functions from 'firebase-functions'
 import { defineSecret } from 'firebase-functions/params'
 import { getMessaging } from 'firebase-admin/messaging'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import {
+  getGroupRecipients,
+  buildGroupNotifBody,
+  type GroupEventLike,
+} from './groupNotify'
 
 // ─── Secrets ──────────────────────────────────────────────────────────────────
 // Thay thế functions.config() (đã deprecated). Set bằng:
 //   firebase functions:secrets:set NOTIFY_SECRET
-//   firebase functions:secrets:set GEMINI_API_KEY
 const notifySecret = defineSecret('NOTIFY_SECRET')
-const geminiApiKey = defineSecret('GEMINI_API_KEY')
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -947,4 +949,231 @@ export const cleanupNotifData = functions
       `[cleanupNotifData] Deleted ${alertsDeleted} alert logs + ${tokensDeleted} stale tokens`,
     )
     return null
+  })
+
+// ─── FUNCTION 8, 9, 10: Thông báo nhóm ──────────────────────────────────────
+//
+//  8. groupEventNotify   — onCreate group_events: thêm/sửa/xoá/status khoản
+//  9. groupMemberJoinedNotify — onUpdate groups: thành viên mới vào nhóm
+// 10. groupDeletedNotify — onDelete groups: chủ nhóm xoá nhóm
+
+/** Helper: gửi thông báo nhóm cho danh sách uid (tái dùng cho join + delete). */
+async function notifyGroupMembers(
+  recipientUids: string[],
+  title: string,
+  body: string,
+  alertKeyFn: (uid: string) => string,
+  fcmData: Record<string, string>,
+): Promise<void> {
+  await Promise.allSettled(recipientUids.map(async uid => {
+    const { tokens, notifEnabled, groupNotifEnabled } = await getTokensForUser(uid)
+    if (!notifEnabled || !groupNotifEnabled || tokens.length === 0) return
+
+    const alertKey = alertKeyFn(uid)
+    if (await wasAlertSent(uid, alertKey)) return
+
+    const user: UserSetting = {
+      userId: uid, tokens, notifEnabled: true, notifTime: '21:00', eventReminderTypes: [],
+    }
+    const sent = await sendNotificationToUser(user, title, body, fcmData)
+    if (sent) await markAlertSent(uid, alertKey)
+  }))
+}
+
+// Logic chọn người nhận + soạn nội dung nằm ở ./groupNotify (thuần, unit-test).
+// Function này chỉ lo I/O Firestore + gửi FCM (tái dùng sendNotificationToUser).
+
+/** Gom tokens của 1 user (legacy field + subcollection). Trả [] nếu không có. */
+async function getTokensForUser(
+  userId: string,
+): Promise<{ tokens: UserToken[]; notifEnabled: boolean; groupNotifEnabled: boolean }> {
+  const settingsDoc = await db.collection('user_settings').doc(userId).get()
+  if (!settingsDoc.exists) return { tokens: [], notifEnabled: false, groupNotifEnabled: false }
+
+  const data = settingsDoc.data() as {
+    fcmToken?: string | null
+    notifEnabled?: boolean
+    groupNotifEnabled?: boolean
+  }
+
+  const tokens: UserToken[] = []
+  const seen = new Set<string>()
+  if (data.fcmToken && typeof data.fcmToken === 'string') {
+    tokens.push({ token: data.fcmToken, docRef: null })
+    seen.add(data.fcmToken)
+  }
+  try {
+    const tokensSnap = await settingsDoc.ref.collection('fcm_tokens').get()
+    for (const tokenDoc of tokensSnap.docs) {
+      const t = tokenDoc.data()?.token
+      if (typeof t === 'string' && !seen.has(t)) {
+        tokens.push({ token: t, docRef: tokenDoc.ref })
+        seen.add(t)
+      }
+    }
+  } catch { /* no-op: subcollection chưa tồn tại */ }
+
+  return {
+    tokens,
+    notifEnabled: !!data.notifEnabled,
+    // Mặc định true: user cũ chưa có field này vẫn nhận thông báo nhóm.
+    groupNotifEnabled: data.groupNotifEnabled !== false,
+  }
+}
+
+export const groupEventNotify = functions
+  .region('asia-southeast1')
+  .firestore.document('group_events/{eventId}')
+  .onCreate(async (snap, context) => {
+    const raw = snap.data()
+    if (!raw) return
+
+    const ev: GroupEventLike = {
+      eventType:    String(raw.eventType ?? ''),
+      actorUid:     String(raw.actorUid ?? ''),
+      participants: Array.isArray(raw.participants) ? raw.participants : [],
+      data:         (raw.data ?? {}) as Record<string, unknown>,
+    }
+
+    const recipients = getGroupRecipients(ev)
+    // Log chẩn đoán: vì sao có / không có người nhận (đặc biệt STATUS_SET).
+    functions.logger.warn(
+      `[groupEventNotify] type=${ev.eventType} actor=${ev.actorUid} ` +
+      `status=${String(ev.data?.status ?? '-')} hasPayerUid=${!!ev.data?.payerUid} ` +
+      `participants=${ev.participants.length} recipients=${recipients.length}`,
+    )
+    if (recipients.length === 0) return
+
+    const groupId = String(raw.groupId ?? '')
+    if (!groupId) return
+
+    // Lấy tên nhóm + tên người thực hiện (1 read). Fallback nếu thiếu.
+    let groupName = 'Nhóm'
+    let actorName = 'Thành viên'
+    try {
+      const groupDoc = await db.collection('groups').doc(groupId).get()
+      const g = groupDoc.data()
+      if (g) {
+        if (typeof g.name === 'string' && g.name.trim()) groupName = g.name.trim()
+        const m = g.members?.[ev.actorUid]
+        if (m && typeof m.name === 'string' && m.name.trim()) actorName = m.name.trim()
+      }
+    } catch (err) {
+      functions.logger.warn(`[groupEventNotify] read group ${groupId} failed:`, err)
+    }
+
+    const eventId = context.params.eventId
+    const names = { groupName, actorName }
+
+    await Promise.allSettled(recipients.map(async uid => {
+      const body = buildGroupNotifBody(ev, uid, names)
+      if (!body) return
+
+      const { tokens, notifEnabled, groupNotifEnabled } = await getTokensForUser(uid)
+      if (!notifEnabled || !groupNotifEnabled || tokens.length === 0) {
+        functions.logger.warn(
+          `[groupEventNotify] skip ${uid}: notifEnabled=${notifEnabled} ` +
+          `groupNotif=${groupNotifEnabled} tokens=${tokens.length}`,
+        )
+        return
+      }
+
+      // Dedup: Firestore trigger giao at-least-once → chống gửi 2 lần.
+      const alertKey = `group_evt_${eventId}`
+      if (await wasAlertSent(uid, alertKey)) return
+
+      const user: UserSetting = {
+        userId: uid,
+        tokens,
+        notifEnabled: true,
+        notifTime: '21:00',
+        eventReminderTypes: [1, 6, 24],
+      }
+
+      const sent = await sendNotificationToUser(user, body.title, body.body, {
+        type:    'group_entry',
+        groupId,
+        url:     `/groups/${groupId}`,
+      })
+      functions.logger.info(`[groupEventNotify] sent=${sent} to ${uid} (${tokens.length} tokens)`)
+      if (sent) {
+        await markAlertSent(uid, alertKey)
+      }
+    }))
+  })
+
+// ─── FUNCTION 9: Thành viên mới vào nhóm ─────────────────────────────────────
+
+export const groupMemberJoinedNotify = functions
+  .region('asia-southeast1')
+  .firestore.document('groups/{groupId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data()
+    const after  = change.after.data()
+    if (!before || !after) return
+
+    const beforeUids: string[] = Array.isArray(before.memberUids) ? before.memberUids : []
+    const afterUids: string[]  = Array.isArray(after.memberUids)  ? after.memberUids  : []
+
+    // Chỉ xử lý khi có uid mới xuất hiện (bỏ qua đổi tên nhóm, gỡ thành viên...)
+    const newUids = afterUids.filter(uid => !beforeUids.includes(uid))
+    if (newUids.length === 0) return
+
+    const groupId   = context.params.groupId
+    const groupName = typeof after.name === 'string' ? after.name.trim() || 'Nhóm' : 'Nhóm'
+
+    for (const newUid of newUids) {
+      const memberInfo = after.members?.[newUid]
+      const newName = typeof memberInfo?.name === 'string'
+        ? memberInfo.name.trim() || 'Thành viên'
+        : 'Thành viên'
+
+      // Báo tất cả thành viên CŨ (không bao gồm người vừa vào)
+      const recipients = beforeUids.filter(uid => uid !== newUid)
+      if (recipients.length === 0) continue
+
+      functions.logger.warn(
+        `[groupMemberJoinedNotify] groupId=${groupId} newMember=${newUid} recipients=${recipients.length}`,
+      )
+
+      await notifyGroupMembers(
+        recipients,
+        `👥 ${groupName}`,
+        `${newName} vừa tham gia nhóm`,
+        _uid => `group_joined_${groupId}_${newUid}`,
+        { type: 'group_member_joined', groupId, url: `/groups/${groupId}` },
+      )
+    }
+  })
+
+// ─── FUNCTION 10: Chủ nhóm xoá nhóm ─────────────────────────────────────────
+
+export const groupDeletedNotify = functions
+  .region('asia-southeast1')
+  .firestore.document('groups/{groupId}')
+  .onDelete(async (snap, context) => {
+    const data = snap.data()
+    if (!data) return
+
+    const memberUids: string[] = Array.isArray(data.memberUids) ? data.memberUids : []
+    if (memberUids.length === 0) return
+
+    const groupId   = context.params.groupId
+    const groupName = typeof data.name === 'string' ? data.name.trim() || 'Nhóm' : 'Nhóm'
+    const ownerUid  = typeof data.ownerUid === 'string' ? data.ownerUid : ''
+    const ownerName = typeof data.members?.[ownerUid]?.name === 'string'
+      ? (data.members[ownerUid].name as string).trim() || 'Chủ nhóm'
+      : 'Chủ nhóm'
+
+    functions.logger.warn(
+      `[groupDeletedNotify] groupId=${groupId} groupName=${groupName} members=${memberUids.length}`,
+    )
+
+    await notifyGroupMembers(
+      memberUids,
+      `👥 ${groupName}`,
+      `${ownerName} đã xoá nhóm này`,
+      _uid => `group_deleted_${groupId}`,
+      { type: 'group_deleted', groupId, url: '/groups' },
+    )
   })

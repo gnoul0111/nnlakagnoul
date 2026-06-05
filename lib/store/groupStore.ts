@@ -4,9 +4,25 @@ import {
   getGroup,
   getGroupEvents,
   getNewGroupEventsSince,
+  subscribeGroupEvents,
 } from '@/lib/services/groupService'
 import { replayGroup, getActiveEntries } from '@/lib/engine/groupReplay'
 import type { Group, GroupEntry, GroupEventDoc } from '@/lib/types/group'
+import type { Unsubscribe } from '@/lib/firebase/firestore'
+
+// PHA B: cửa sổ lùi cho cursor realtime (tránh sót event do clock skew).
+const REALTIME_SKEW_BUFFER_MS = 30 * 1000
+
+// Một listener cho NHÓM ĐANG MỞ tại một thời điểm. Lưu ở module scope để
+// luôn tear down trước khi subscribe nhóm khác (chống leak khi chuyển nhóm).
+let _unsubGroupRealtime: Unsubscribe | null = null
+
+function teardownGroupRealtime(): void {
+  if (_unsubGroupRealtime) {
+    _unsubGroupRealtime()
+    _unsubGroupRealtime = null
+  }
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // Store RIÊNG cho module nhóm. KHÔNG dùng chung eventStore cá nhân.
@@ -33,6 +49,7 @@ interface GroupStoreState {
   dropGroup:       (groupId: string) => void
   applyLocalEvent: (event: GroupEventDoc) => void
   upsertGroup:     (group: Group) => void
+  stopRealtime:    () => void
   reset:           () => void
 }
 
@@ -59,6 +76,8 @@ export const useGroupStore = create<GroupStoreState>((set, get) => ({
   },
 
   selectGroup: async (groupId: string, uid: string) => {
+    // Đổi nhóm → tear down listener nhóm cũ trước
+    teardownGroupRealtime()
     set({ currentGroupId: groupId, entriesLoading: true, error: null, entries: [], _events: [] })
     try {
       // Lấy meta nhóm (ưu tiên từ list đã có để đỡ 1 round-trip)
@@ -76,6 +95,26 @@ export const useGroupStore = create<GroupStoreState>((set, get) => ({
         _events:        events,
         _lastSync:      Date.now(),
         entriesLoading: false,
+      })
+
+      // PHA B: subscribe realtime cho nhóm đang mở. Khi thành viên khác ghi
+      // khoản/đổi trạng thái → đẩy về ngay, không cần refresh thủ công.
+      // Teardown lần nữa ngay trước khi gán — chống race 2 selectGroup async
+      // cùng subscribe (strict-mode / chuyển nhóm nhanh) làm bỏ rơi listener cũ.
+      teardownGroupRealtime()
+      const sinceMs = (get()._lastSync ?? Date.now()) - REALTIME_SKEW_BUFFER_MS
+      _unsubGroupRealtime = subscribeGroupEvents(groupId, uid, sinceMs, incoming => {
+        // Guard: user đã chuyển nhóm khác trong lúc listener còn sống
+        if (get().currentGroupId !== groupId) return
+
+        const { _events } = get()
+        const ids = new Set(_events.map(e => e.id))
+        const newOnes = incoming.filter(e => !ids.has(e.id))
+        if (newOnes.length === 0) return
+
+        const merged = [..._events, ...newOnes]
+        const nextState = replayGroup(merged)
+        set({ _events: merged, entries: getActiveEntries(nextState), _lastSync: Date.now() })
       })
     } catch (err) {
       console.error('[groupStore] selectGroup failed:', err)
@@ -116,6 +155,7 @@ export const useGroupStore = create<GroupStoreState>((set, get) => ({
 
   // Gỡ nhóm khỏi state (sau khi xoá).
   dropGroup: (groupId: string) => {
+    if (get().currentGroupId === groupId) teardownGroupRealtime()
     set(state => ({
       groups: state.groups?.filter(g => g.id !== groupId) ?? null,
       ...(state.currentGroupId === groupId
@@ -140,8 +180,14 @@ export const useGroupStore = create<GroupStoreState>((set, get) => ({
     set({ groups: next })
   },
 
-  reset: () => set({
-    groups: null, groupsLoading: false, currentGroupId: null, currentGroup: null,
-    entries: [], entriesLoading: false, error: null, _events: [], _lastSync: null,
-  }),
+  // Dừng realtime listener mà KHÔNG xóa state (dùng khi rời route nhóm).
+  stopRealtime: () => teardownGroupRealtime(),
+
+  reset: () => {
+    teardownGroupRealtime()
+    set({
+      groups: null, groupsLoading: false, currentGroupId: null, currentGroup: null,
+      entries: [], entriesLoading: false, error: null, _events: [], _lastSync: null,
+    })
+  },
 }))

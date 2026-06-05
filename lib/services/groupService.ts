@@ -11,6 +11,8 @@ import {
   getDocument,
   setDocument,
   updateDocument,
+  onSnapshot,
+  type Unsubscribe,
 } from '@/lib/firebase/firestore'
 import {
   GROUP_EVENT_TYPES,
@@ -140,6 +142,39 @@ export async function getNewGroupEventsSince(
   return snap.docs.map(d => ({ id: d.id, ...d.data() }) as GroupEventDoc)
 }
 
+/**
+ * Realtime listener cho group_events của 1 nhóm — PHA B.
+ * Dùng cùng query với getNewGroupEventsSince (groupId + participants array-contains
+ * + timestamp), nên KHÔNG cần thêm composite index mới.
+ * Lần emit đầu tiên trả về cửa sổ gần đây; caller dedup theo id.
+ */
+export function subscribeGroupEvents(
+  groupId: string,
+  uid: string,
+  sinceMs: number,
+  onEvents: (events: GroupEventDoc[]) => void,
+): Unsubscribe {
+  const syncPoint = new Timestamp(Math.floor(sinceMs / 1000), 0)
+  const ref = collection(db, COLLECTIONS.GROUP_EVENTS)
+  const q = query(
+    ref,
+    where('groupId', '==', groupId),
+    where('participants', 'array-contains', uid),
+    where('timestamp', '>', syncPoint),
+    orderBy('timestamp', 'asc'),
+  )
+  return onSnapshot(
+    q,
+    snap => {
+      const changed = snap.docChanges()
+        .filter(c => c.type === 'added' || c.type === 'modified')
+        .map(c => ({ id: c.doc.id, ...c.doc.data() }) as GroupEventDoc)
+      if (changed.length > 0) onEvents(changed)
+    },
+    err => console.error('[groupService] realtime listener error:', err),
+  )
+}
+
 // ─── Entry mutations (build event + append) ───────────────────────────────────
 
 export interface AddEntryInput {
@@ -199,6 +234,7 @@ export async function updateGroupEntry(
   actorUid: string,
   next: GroupEntry,
   prevParticipants: string[],
+  financialChanged = true,
 ): Promise<void> {
   const participants = Array.from(new Set([...prevParticipants, ...next.participants]))
   await appendGroupEvent({
@@ -216,6 +252,9 @@ export async function updateGroupEntry(
       splitMode: next.splitMode,
       splits:    next.splits,
       participants: next.participants,
+      // Hint cho Cloud Function groupEventNotify: chỉ báo khi tiền/cách chia đổi
+      // (tránh spam khi chỉ sửa note/ngày). Thiếu field (client cũ) → CF mặc định báo.
+      notifyFinancial: financialChanged,
     },
   })
 }
@@ -227,7 +266,8 @@ export async function deleteGroupEntry(actorUid: string, entry: GroupEntry): Pro
     participants: entry.participants,
     eventType: GROUP_EVENT_TYPES.GROUP_ENTRY_DELETED,
     createdAt: new Date().toISOString(),
-    data: { id: entry.id },
+    // note: để Cloud Function groupEventNotify hiện tên khoản trong thông báo xoá.
+    data: { id: entry.id, note: entry.note },
   })
 }
 
@@ -246,6 +286,8 @@ export async function setEntryStatus(
     participants: entry.participants,
     eventType:    GROUP_EVENT_TYPES.GROUP_ENTRY_STATUS_SET,
     createdAt:    new Date().toISOString(),
-    data: { id: entry.id, uid: actorUid, status },
+    // payerUid + note: để Cloud Function groupEventNotify báo riêng cho người trả
+    // ("X đã xử lý phần của họ") mà không phải replay lại khoản để tra payer/tên.
+    data: { id: entry.id, uid: actorUid, status, payerUid: entry.payerUid, note: entry.note },
   })
 }

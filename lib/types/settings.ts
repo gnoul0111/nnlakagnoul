@@ -16,6 +16,7 @@ export interface UserSettings {
   moneyHidden: boolean      // Ẩn/hiện số tiền toàn app
   fcmToken?: string | null
   notifEnabled: boolean
+  groupNotifEnabled?: boolean // Bật thông báo nhóm (chi tiêu chung) — gated dưới notifEnabled, default true
   notifTime: string         // HH:mm — giờ nhắc nhập chi tiêu, default "21:00"
   eventReminderTypes: number[] // [1, 6, 24] giờ trước
   tokenType?: TokenType | null

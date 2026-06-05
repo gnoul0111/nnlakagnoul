@@ -11,6 +11,8 @@ import {
   COLLECTIONS,
   getDocument,
   setDocument,
+  onSnapshot,
+  type Unsubscribe,
 } from '@/lib/firebase/firestore'
 import type { EventDoc, EventDocInput } from '@/lib/types/events'
 import type { ReplayedState } from '@/lib/engine/replay'
@@ -71,6 +73,39 @@ export async function getNewEventsSince(
   )
   const snap = await getDocs(q)
   return snap.docs.map(d => ({ id: d.id, ...d.data() }) as EventDoc)
+}
+
+// ─── Realtime listener — PHA B ─────────────────────────────────────────────────
+//
+// Subscribe các event mới hơn `sinceMs` (lùi buffer ngoài hàm này). Firestore
+// đẩy về realtime: lần đầu callback nhận TẤT CẢ doc khớp query (dưới dạng
+// 'added'), sau đó chỉ nhận delta. Event là append-only nên thực tế chỉ có
+// 'added'; vẫn nhận 'modified' phòng hờ. Dedup theo id do caller xử lý
+// (mergeEvents) → an toàn với phần đã có trong cache.
+
+export function subscribeNewEvents(
+  userId: string,
+  sinceMs: number,
+  onEvents: (events: EventDoc[]) => void,
+): Unsubscribe {
+  const syncPoint = new Timestamp(Math.floor(sinceMs / 1000), 0)
+  const ref = collection(db, COLLECTIONS.EXPENSE_EVENTS)
+  const q = query(
+    ref,
+    where('userId', '==', userId),
+    where('timestamp', '>', syncPoint),
+    orderBy('timestamp', 'asc'),
+  )
+  return onSnapshot(
+    q,
+    snap => {
+      const changed = snap.docChanges()
+        .filter(c => c.type === 'added' || c.type === 'modified')
+        .map(c => ({ id: c.doc.id, ...c.doc.data() }) as EventDoc)
+      if (changed.length > 0) onEvents(changed)
+    },
+    err => console.error('[eventService] realtime listener error:', err),
+  )
 }
 
 // ─── Batch append (dùng khi flush offline queue) ─────────────────────────────
