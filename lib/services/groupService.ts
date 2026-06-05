@@ -266,7 +266,8 @@ export async function deleteGroupEntry(actorUid: string, entry: GroupEntry): Pro
     participants: entry.participants,
     eventType: GROUP_EVENT_TYPES.GROUP_ENTRY_DELETED,
     createdAt: new Date().toISOString(),
-    data: { id: entry.id },
+    // note: để Cloud Function groupEventNotify hiện tên khoản trong thông báo xoá.
+    data: { id: entry.id, note: entry.note },
   })
 }
 
