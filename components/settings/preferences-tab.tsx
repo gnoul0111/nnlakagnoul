@@ -379,6 +379,19 @@ export function PreferencesTab() {
               </div>
             </Row>
 
+            {/* Thông báo nhóm */}
+            <Row className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">Thông báo nhóm</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Báo khi có khoản chung mới hoặc thay đổi</p>
+              </div>
+              <ToggleSwitch
+                checked={settings.groupNotifEnabled !== false}
+                onChange={v => save('groupNotif', () => updateSettings(user.uid, { groupNotifEnabled: v }))}
+                disabled={saving === 'groupNotif'}
+              />
+            </Row>
+
             {/* Test notification button */}
             <Row className="flex items-center justify-between">
               <div>

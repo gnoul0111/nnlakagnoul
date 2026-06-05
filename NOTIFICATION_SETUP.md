@@ -104,6 +104,24 @@ curl -X POST `
 4. Chờ ~1-2 phút → nhận thông báo "🎉 Chi Tiêu — Có bản cập nhật mới!"
 5. Bấm vào thông báo → mở app → thấy nút "Cập nhật" trong Settings
 
+## 6b. Thông báo nhóm (chi tiêu chung)
+
+Function `groupEventNotify` tự gửi thông báo cho thành viên nhóm khi có khoản
+chung mới / bị sửa (đổi tiền hoặc cách chia) / hoặc ai đó bấm "Đã xử lý" (báo
+riêng người trả). Trigger Firestore `onCreate` trên `group_events` — KHÔNG cần
+secret, KHÔNG cần env mới.
+
+Deploy (lần đầu hoặc khi sửa logic):
+```powershell
+cd functions
+npm run build
+cd ..
+firebase deploy --only functions:groupEventNotify
+```
+
+Bật/tắt: trong app → Cài đặt → Thông báo → "Thông báo nhóm" (mặc định bật khi
+đã bật thông báo). Gửi cho mọi thiết bị của thành viên, dùng chung pipeline FCM.
+
 ## 7. Debug
 
 Xem log Cloud Function realtime:

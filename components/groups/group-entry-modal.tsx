@@ -109,11 +109,20 @@ export function GroupEntryModal({ open, onClose, group, currentUid, edit, onSave
     setBusy(true)
     try {
       if (edit) {
+        // Chỉ báo (push) khi tiền/người trả/cách chia đổi — sửa note/ngày không báo.
+        const splitsKey = (ss: { uid: string; amount: number }[]) =>
+          [...ss].sort((a, b) => a.uid.localeCompare(b.uid)).map(s => `${s.uid}:${s.amount}`).join('|')
+        const financialChanged =
+          edit.total !== total ||
+          edit.payerUid !== payerUid ||
+          splitsKey(edit.splits) !== splitsKey(splits)
+
         await updateGroupEntry(
           currentUid,
           { ...edit, payerUid, total, note, date, splitMode: mode, splits,
             participants: Array.from(new Set([payerUid, currentUid, ...splits.map(s => s.uid)])) },
           edit.participants,
+          financialChanged,
         )
         toast.success('Đã cập nhật khoản.')
       } else {
