@@ -15,11 +15,9 @@ import { httpsCallable } from 'firebase/functions'
 import { getMessagingInstance, db, functions } from '@/lib/firebase/config'
 import {
   saveFcmToken,
-  isFcmTokenStale,
   getOrCreateDeviceId,
 } from '@/lib/services/settingsService'
 import type { UserSettings } from '@/lib/types/settings'
-import type { Timestamp } from 'firebase/firestore'
 
 const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY!
 
@@ -80,40 +78,22 @@ async function getFCMToken(): Promise<string | null> {
   }
 }
 
-// ─── Check token freshness (multi-device aware) ──────────────────────────────
-//
-// Thay vì đọc `settings.tokenUpdatedAt` (legacy, chỉ có 1 value cho user),
-// check trực tiếp doc trong subcollection `fcm_tokens/{deviceId}` của device
-// hiện tại. Đúng hơn vì mỗi device có timestamp riêng.
-
-async function isCurrentDeviceTokenStale(userId: string): Promise<boolean> {
-  if (typeof window === 'undefined') return true
-
-  const deviceId = getOrCreateDeviceId()
-  const ref = doc(db, 'user_settings', userId, 'fcm_tokens', deviceId)
-  try {
-    const snap = await getDoc(ref)
-    if (!snap.exists()) return true
-    const lastUsedAt = snap.data()?.lastUsedAt as Timestamp | undefined
-    return isFcmTokenStale(lastUsedAt ?? null)
-  } catch {
-    // Doc không truy cập được (permission denied, hoặc chưa có) → coi là stale
-    return true
-  }
-}
-
 // ─── Main init ────────────────────────────────────────────────────────────────
 
 /**
  * Khởi tạo notifications cho user.
- * Chỉ chạy khi notifEnabled = true VÀ (token cho device này chưa có HOẶC > 30 ngày).
+ *
+ * Luôn gọi getToken() mỗi khi app mở (FCM SDK cache nội bộ → rất rẻ).
+ * So sánh với token đang lưu trong Firestore: nếu khác (SW thay đổi sau deploy,
+ * hoặc FCM rotate) thì ghi token mới — không cần user tắt/bật thủ công.
  *
  * iOS LƯU Ý: Chỉ hoạt động khi PWA đã được cài vào home screen.
  */
 export async function initNotifications(
   userId: string,
   settings: UserSettings,
-  forceRefresh = false,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _forceRefresh = false,
 ): Promise<boolean> {
   if (!settings.notifEnabled) return false
   if (!isWebPushSupported()) return false
@@ -124,20 +104,27 @@ export async function initNotifications(
     return false
   }
 
-  // Bỏ qua nếu token cho device NÀY còn mới (trừ khi bị force)
-  if (!forceRefresh) {
-    const stale = await isCurrentDeviceTokenStale(userId)
-    if (!stale) return true
-  }
-
-  // Xin quyền
+  // Xin quyền (nếu đã granted thì trả về ngay, không prompt lại)
   const permission = await requestNotificationPermission()
   if (permission !== 'granted') return false
 
+  // Lấy token hiện tại từ FCM SDK (kết quả được cache bởi SDK — không gọi network nếu chưa đổi)
   const token = await getFCMToken()
   if (!token) {
     console.warn('[Notifications] getFCMToken returned null')
     return false
+  }
+
+  // So sánh với token đang lưu trong Firestore cho device này.
+  // Nếu khác (vd: SW thay đổi sau deploy) → save token mới để CF dùng được.
+  const deviceId = getOrCreateDeviceId()
+  const tokenRef = doc(db, 'user_settings', userId, 'fcm_tokens', deviceId)
+  try {
+    const snap = await getDoc(tokenRef)
+    const storedToken = snap.exists() ? (snap.data()?.token as string | undefined) : null
+    if (storedToken === token) return true  // token chưa đổi → không cần ghi
+  } catch {
+    // Không đọc được → vẫn save để đảm bảo
   }
 
   await saveFcmToken(userId, token, 'fcm')

@@ -1016,7 +1016,7 @@ export const groupEventNotify = functions
 
     const recipients = getGroupRecipients(ev)
     // Log chẩn đoán: vì sao có / không có người nhận (đặc biệt STATUS_SET).
-    functions.logger.info(
+    functions.logger.warn(
       `[groupEventNotify] type=${ev.eventType} actor=${ev.actorUid} ` +
       `status=${String(ev.data?.status ?? '-')} hasPayerUid=${!!ev.data?.payerUid} ` +
       `participants=${ev.participants.length} recipients=${recipients.length}`,
@@ -1050,7 +1050,7 @@ export const groupEventNotify = functions
 
       const { tokens, notifEnabled, groupNotifEnabled } = await getTokensForUser(uid)
       if (!notifEnabled || !groupNotifEnabled || tokens.length === 0) {
-        functions.logger.info(
+        functions.logger.warn(
           `[groupEventNotify] skip ${uid}: notifEnabled=${notifEnabled} ` +
           `groupNotif=${groupNotifEnabled} tokens=${tokens.length}`,
         )

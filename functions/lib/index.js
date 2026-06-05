@@ -893,7 +893,7 @@ exports.groupEventNotify = functions
     };
     const recipients = (0, groupNotify_1.getGroupRecipients)(ev);
     // Log chẩn đoán: vì sao có / không có người nhận (đặc biệt STATUS_SET).
-    functions.logger.info(`[groupEventNotify] type=${ev.eventType} actor=${ev.actorUid} ` +
+    functions.logger.warn(`[groupEventNotify] type=${ev.eventType} actor=${ev.actorUid} ` +
         `status=${String((_e = (_d = ev.data) === null || _d === void 0 ? void 0 : _d.status) !== null && _e !== void 0 ? _e : '-')} hasPayerUid=${!!((_f = ev.data) === null || _f === void 0 ? void 0 : _f.payerUid)} ` +
         `participants=${ev.participants.length} recipients=${recipients.length}`);
     if (recipients.length === 0)
@@ -926,7 +926,7 @@ exports.groupEventNotify = functions
             return;
         const { tokens, notifEnabled, groupNotifEnabled } = await getTokensForUser(uid);
         if (!notifEnabled || !groupNotifEnabled || tokens.length === 0) {
-            functions.logger.info(`[groupEventNotify] skip ${uid}: notifEnabled=${notifEnabled} ` +
+            functions.logger.warn(`[groupEventNotify] skip ${uid}: notifEnabled=${notifEnabled} ` +
                 `groupNotif=${groupNotifEnabled} tokens=${tokens.length}`);
             return;
         }
