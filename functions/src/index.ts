@@ -951,14 +951,35 @@ export const cleanupNotifData = functions
     return null
   })
 
-// ─── FUNCTION 8: Thông báo nhóm (chi tiêu chung) ─────────────────────────────
+// ─── FUNCTION 8, 9, 10: Thông báo nhóm ──────────────────────────────────────
 //
-// Trigger onCreate trên group_events. Báo cho các thành viên KHÁC khi:
-//   • Thêm khoản chung mới   (mọi participant trừ người tạo)
-//   • Sửa khoản (tiền/chia)  (mọi participant trừ người sửa; bỏ qua nếu chỉ
-//                             sửa note/ngày — client gắn cờ data.notifyFinancial)
-//   • Ai đó bấm "Đã xử lý"   (báo RIÊNG người trả)
-//
+//  8. groupEventNotify   — onCreate group_events: thêm/sửa/xoá/status khoản
+//  9. groupMemberJoinedNotify — onUpdate groups: thành viên mới vào nhóm
+// 10. groupDeletedNotify — onDelete groups: chủ nhóm xoá nhóm
+
+/** Helper: gửi thông báo nhóm cho danh sách uid (tái dùng cho join + delete). */
+async function notifyGroupMembers(
+  recipientUids: string[],
+  title: string,
+  body: string,
+  alertKeyFn: (uid: string) => string,
+  fcmData: Record<string, string>,
+): Promise<void> {
+  await Promise.allSettled(recipientUids.map(async uid => {
+    const { tokens, notifEnabled, groupNotifEnabled } = await getTokensForUser(uid)
+    if (!notifEnabled || !groupNotifEnabled || tokens.length === 0) return
+
+    const alertKey = alertKeyFn(uid)
+    if (await wasAlertSent(uid, alertKey)) return
+
+    const user: UserSetting = {
+      userId: uid, tokens, notifEnabled: true, notifTime: '21:00', eventReminderTypes: [],
+    }
+    const sent = await sendNotificationToUser(user, title, body, fcmData)
+    if (sent) await markAlertSent(uid, alertKey)
+  }))
+}
+
 // Logic chọn người nhận + soạn nội dung nằm ở ./groupNotify (thuần, unit-test).
 // Function này chỉ lo I/O Firestore + gửi FCM (tái dùng sendNotificationToUser).
 
@@ -1079,4 +1100,80 @@ export const groupEventNotify = functions
         await markAlertSent(uid, alertKey)
       }
     }))
+  })
+
+// ─── FUNCTION 9: Thành viên mới vào nhóm ─────────────────────────────────────
+
+export const groupMemberJoinedNotify = functions
+  .region('asia-southeast1')
+  .firestore.document('groups/{groupId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data()
+    const after  = change.after.data()
+    if (!before || !after) return
+
+    const beforeUids: string[] = Array.isArray(before.memberUids) ? before.memberUids : []
+    const afterUids: string[]  = Array.isArray(after.memberUids)  ? after.memberUids  : []
+
+    // Chỉ xử lý khi có uid mới xuất hiện (bỏ qua đổi tên nhóm, gỡ thành viên...)
+    const newUids = afterUids.filter(uid => !beforeUids.includes(uid))
+    if (newUids.length === 0) return
+
+    const groupId   = context.params.groupId
+    const groupName = typeof after.name === 'string' ? after.name.trim() || 'Nhóm' : 'Nhóm'
+
+    for (const newUid of newUids) {
+      const memberInfo = after.members?.[newUid]
+      const newName = typeof memberInfo?.name === 'string'
+        ? memberInfo.name.trim() || 'Thành viên'
+        : 'Thành viên'
+
+      // Báo tất cả thành viên CŨ (không bao gồm người vừa vào)
+      const recipients = beforeUids.filter(uid => uid !== newUid)
+      if (recipients.length === 0) continue
+
+      functions.logger.warn(
+        `[groupMemberJoinedNotify] groupId=${groupId} newMember=${newUid} recipients=${recipients.length}`,
+      )
+
+      await notifyGroupMembers(
+        recipients,
+        `👥 ${groupName}`,
+        `${newName} vừa tham gia nhóm`,
+        _uid => `group_joined_${groupId}_${newUid}`,
+        { type: 'group_member_joined', groupId, url: `/groups/${groupId}` },
+      )
+    }
+  })
+
+// ─── FUNCTION 10: Chủ nhóm xoá nhóm ─────────────────────────────────────────
+
+export const groupDeletedNotify = functions
+  .region('asia-southeast1')
+  .firestore.document('groups/{groupId}')
+  .onDelete(async (snap, context) => {
+    const data = snap.data()
+    if (!data) return
+
+    const memberUids: string[] = Array.isArray(data.memberUids) ? data.memberUids : []
+    if (memberUids.length === 0) return
+
+    const groupId   = context.params.groupId
+    const groupName = typeof data.name === 'string' ? data.name.trim() || 'Nhóm' : 'Nhóm'
+    const ownerUid  = typeof data.ownerUid === 'string' ? data.ownerUid : ''
+    const ownerName = typeof data.members?.[ownerUid]?.name === 'string'
+      ? (data.members[ownerUid].name as string).trim() || 'Chủ nhóm'
+      : 'Chủ nhóm'
+
+    functions.logger.warn(
+      `[groupDeletedNotify] groupId=${groupId} groupName=${groupName} members=${memberUids.length}`,
+    )
+
+    await notifyGroupMembers(
+      memberUids,
+      `👥 ${groupName}`,
+      `${ownerName} đã xoá nhóm này`,
+      _uid => `group_deleted_${groupId}`,
+      { type: 'group_deleted', groupId, url: '/groups' },
+    )
   })
