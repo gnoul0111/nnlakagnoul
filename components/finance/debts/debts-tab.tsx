@@ -102,9 +102,17 @@ export function DebtsTab() {
   const lendDebts   = active.filter(d => d.type === 'lend')
   const borrowDebts = active.filter(d => d.type === 'borrow')
   const lendActive    = sortActive(lendDebts.filter(d => !isDebtSettled(d)))
-  const lendSettled   = lendDebts.filter(d => isDebtSettled(d))
+  const lendSettled   = lendDebts.filter(d => isDebtSettled(d)).sort((a, b) => {
+    const lastA = a.payments.reduce((mx, p) => p.date > mx ? p.date : mx, a.date ?? '')
+    const lastB = b.payments.reduce((mx, p) => p.date > mx ? p.date : mx, b.date ?? '')
+    return lastB > lastA ? 1 : lastB < lastA ? -1 : 0
+  })
   const borrowActive  = sortActive(borrowDebts.filter(d => !isDebtSettled(d)))
-  const borrowSettled = borrowDebts.filter(d => isDebtSettled(d))
+  const borrowSettled = borrowDebts.filter(d => isDebtSettled(d)).sort((a, b) => {
+    const lastA = a.payments.reduce((mx, p) => p.date > mx ? p.date : mx, a.date ?? '')
+    const lastB = b.payments.reduce((mx, p) => p.date > mx ? p.date : mx, b.date ?? '')
+    return lastB > lastA ? 1 : lastB < lastA ? -1 : 0
+  })
   const [showLendSettled,   setShowLendSettled]   = useState(false)
   const [showBorrowSettled, setShowBorrowSettled] = useState(false)
 
