@@ -1015,6 +1015,12 @@ export const groupEventNotify = functions
     }
 
     const recipients = getGroupRecipients(ev)
+    // Log chẩn đoán: vì sao có / không có người nhận (đặc biệt STATUS_SET).
+    functions.logger.info(
+      `[groupEventNotify] type=${ev.eventType} actor=${ev.actorUid} ` +
+      `status=${String(ev.data?.status ?? '-')} hasPayerUid=${!!ev.data?.payerUid} ` +
+      `participants=${ev.participants.length} recipients=${recipients.length}`,
+    )
     if (recipients.length === 0) return
 
     const groupId = String(raw.groupId ?? '')
@@ -1043,7 +1049,13 @@ export const groupEventNotify = functions
       if (!body) return
 
       const { tokens, notifEnabled, groupNotifEnabled } = await getTokensForUser(uid)
-      if (!notifEnabled || !groupNotifEnabled || tokens.length === 0) return
+      if (!notifEnabled || !groupNotifEnabled || tokens.length === 0) {
+        functions.logger.info(
+          `[groupEventNotify] skip ${uid}: notifEnabled=${notifEnabled} ` +
+          `groupNotif=${groupNotifEnabled} tokens=${tokens.length}`,
+        )
+        return
+      }
 
       // Dedup: Firestore trigger giao at-least-once → chống gửi 2 lần.
       const alertKey = `group_evt_${eventId}`
@@ -1062,6 +1074,7 @@ export const groupEventNotify = functions
         groupId,
         url:     `/groups/${groupId}`,
       })
+      functions.logger.info(`[groupEventNotify] sent=${sent} to ${uid} (${tokens.length} tokens)`)
       if (sent) {
         await markAlertSent(uid, alertKey)
       }

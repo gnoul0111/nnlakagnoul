@@ -881,7 +881,7 @@ exports.groupEventNotify = functions
     .region('asia-southeast1')
     .firestore.document('group_events/{eventId}')
     .onCreate(async (snap, context) => {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     const raw = snap.data();
     if (!raw)
         return;
@@ -892,9 +892,13 @@ exports.groupEventNotify = functions
         data: ((_c = raw.data) !== null && _c !== void 0 ? _c : {}),
     };
     const recipients = (0, groupNotify_1.getGroupRecipients)(ev);
+    // Log chẩn đoán: vì sao có / không có người nhận (đặc biệt STATUS_SET).
+    functions.logger.info(`[groupEventNotify] type=${ev.eventType} actor=${ev.actorUid} ` +
+        `status=${String((_e = (_d = ev.data) === null || _d === void 0 ? void 0 : _d.status) !== null && _e !== void 0 ? _e : '-')} hasPayerUid=${!!((_f = ev.data) === null || _f === void 0 ? void 0 : _f.payerUid)} ` +
+        `participants=${ev.participants.length} recipients=${recipients.length}`);
     if (recipients.length === 0)
         return;
-    const groupId = String((_d = raw.groupId) !== null && _d !== void 0 ? _d : '');
+    const groupId = String((_g = raw.groupId) !== null && _g !== void 0 ? _g : '');
     if (!groupId)
         return;
     // Lấy tên nhóm + tên người thực hiện (1 read). Fallback nếu thiếu.
@@ -906,7 +910,7 @@ exports.groupEventNotify = functions
         if (g) {
             if (typeof g.name === 'string' && g.name.trim())
                 groupName = g.name.trim();
-            const m = (_e = g.members) === null || _e === void 0 ? void 0 : _e[ev.actorUid];
+            const m = (_h = g.members) === null || _h === void 0 ? void 0 : _h[ev.actorUid];
             if (m && typeof m.name === 'string' && m.name.trim())
                 actorName = m.name.trim();
         }
@@ -921,8 +925,11 @@ exports.groupEventNotify = functions
         if (!body)
             return;
         const { tokens, notifEnabled, groupNotifEnabled } = await getTokensForUser(uid);
-        if (!notifEnabled || !groupNotifEnabled || tokens.length === 0)
+        if (!notifEnabled || !groupNotifEnabled || tokens.length === 0) {
+            functions.logger.info(`[groupEventNotify] skip ${uid}: notifEnabled=${notifEnabled} ` +
+                `groupNotif=${groupNotifEnabled} tokens=${tokens.length}`);
             return;
+        }
         // Dedup: Firestore trigger giao at-least-once → chống gửi 2 lần.
         const alertKey = `group_evt_${eventId}`;
         if (await wasAlertSent(uid, alertKey))
@@ -939,6 +946,7 @@ exports.groupEventNotify = functions
             groupId,
             url: `/groups/${groupId}`,
         });
+        functions.logger.info(`[groupEventNotify] sent=${sent} to ${uid} (${tokens.length} tokens)`);
         if (sent) {
             await markAlertSent(uid, alertKey);
         }
