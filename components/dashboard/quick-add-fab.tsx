@@ -73,7 +73,7 @@ export function QuickAddFab() {
           onClick={() => setExpanded(v => !v)}
           className={cn(
             'w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white transition-all duration-200 active:scale-95',
-            expanded ? 'bg-muted-foreground rotate-45' : 'bg-primary',
+            expanded ? 'bg-muted-foreground rotate-45' : 'bg-brand-gradient shadow-primary/30',
           )}
           aria-label="Thêm nhanh"
         >
