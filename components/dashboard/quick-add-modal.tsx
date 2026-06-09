@@ -211,7 +211,7 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
         </div>
 
         <Button type="submit" className="w-full" size="lg" loading={isSubmitting || isPending}>
-          Lưu
+          {tab === 'expense' ? 'Thêm chi tiêu' : 'Thêm thu nhập'}
         </Button>
       </form>
     </Modal>
