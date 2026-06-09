@@ -250,7 +250,7 @@ export function GroupEntryModal({ open, onClose, group, currentUid, edit, onSave
           )}
         </div>
 
-        <Button className="w-full" size="lg" loading={busy} disabled={!valid} onClick={handleSave}>
+        <Button variant="gradient" className="w-full" size="lg" loading={busy} disabled={!valid} onClick={handleSave}>
           {edit ? 'Lưu thay đổi' : 'Thêm khoản chung'}
         </Button>
       </div>

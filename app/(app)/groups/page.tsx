@@ -165,7 +165,7 @@ export default function GroupsPage() {
           <FormField label="Tên nhóm" required>
             <Input placeholder="Gia đình, Phòng trọ..." autoFocus value={name} onChange={e => setName(e.target.value)} />
           </FormField>
-          <Button className="w-full" size="lg" loading={busy} onClick={handleCreate}>Tạo nhóm</Button>
+          <Button variant="gradient" className="w-full" size="lg" loading={busy} onClick={handleCreate}>Tạo nhóm</Button>
         </div>
       </Modal>
 
@@ -182,7 +182,7 @@ export default function GroupsPage() {
               className="uppercase tracking-widest text-center text-lg font-mono"
             />
           </FormField>
-          <Button className="w-full" size="lg" loading={busy} onClick={handleJoin}>Tham gia</Button>
+          <Button variant="gradient" className="w-full" size="lg" loading={busy} onClick={handleJoin}>Tham gia</Button>
         </div>
       </Modal>
     </div>

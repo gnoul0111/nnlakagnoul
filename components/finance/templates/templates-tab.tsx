@@ -149,7 +149,7 @@ export function TemplatesTab() {
               <Input placeholder="Tùy chọn" {...register('note')} />
             </FormField>
           </div>
-          <Button type="submit" className="w-full" size="lg" loading={saving}>Tạo biểu mẫu</Button>
+          <Button type="submit" variant="gradient" className="w-full" size="lg" loading={saving}>Tạo biểu mẫu</Button>
         </form>
       </Modal>
 

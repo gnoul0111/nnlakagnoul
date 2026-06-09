@@ -100,6 +100,7 @@ export function ForgotPasswordForm() {
 
       <Button
         type="submit"
+        variant="gradient"
         className="w-full mt-2"
         size="lg"
         loading={isSubmitting}
