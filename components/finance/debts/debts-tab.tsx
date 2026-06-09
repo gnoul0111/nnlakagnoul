@@ -434,7 +434,7 @@ export function DebtsTab() {
           <FormField label="Ghi chú">
             <Input placeholder="Tùy chọn" {...df.register('note')} />
           </FormField>
-          <Button type="submit" className="w-full" size="lg" loading={savingDebt}>
+          <Button type="submit" variant="gradient" className="w-full" size="lg" loading={savingDebt}>
             {debtForm.edit ? 'Lưu thay đổi' : 'Thêm khoản nợ'}
           </Button>
         </form>
@@ -458,7 +458,7 @@ export function DebtsTab() {
             <input type="checkbox" checked={addToExpenses} onChange={e => setAddToExpenses(e.target.checked)} className="w-4 h-4 rounded accent-primary" />
             Ghi vào chi tiêu
           </label>
-          <Button type="submit" className="w-full" size="lg" loading={savingPayment}>Lưu lần trả</Button>
+          <Button type="submit" variant="gradient" className="w-full" size="lg" loading={savingPayment}>Lưu lần trả</Button>
         </form>
       </Modal>
 

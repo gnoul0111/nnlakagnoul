@@ -304,7 +304,7 @@ export function SavingsTab() {
             <input type="checkbox" checked={addToExpenses} onChange={e => setAddToExpenses(e.target.checked)} className="w-4 h-4 rounded accent-primary" />
             Ghi vào chi tiêu (mặc định)
           </label>
-          <Button type="submit" className="w-full" size="lg" loading={savingDeposit}>Nạp tiền</Button>
+          <Button type="submit" variant="gradient" className="w-full" size="lg" loading={savingDeposit}>Nạp tiền</Button>
         </form>
       </Modal>
 
@@ -340,7 +340,7 @@ export function SavingsTab() {
             <FormField label="Ngày" required><DatePicker value={wf.watch('date')} onChange={v => wf.setValue('date', v)} /></FormField>
             <FormField label="Lý do"><Input placeholder="Tùy chọn" {...wf.register('reason')} /></FormField>
           </div>
-          <Button type="submit" className="w-full" size="lg" loading={savingWithdraw}>Rút tiền</Button>
+          <Button type="submit" variant="gradient" className="w-full" size="lg" loading={savingWithdraw}>Rút tiền</Button>
         </form>
       </Modal>
 

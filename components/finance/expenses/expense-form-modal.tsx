@@ -199,7 +199,7 @@ export function ExpenseFormModal({ open, onClose, editExpense, copyFrom, default
           </FormField>
         </div>
 
-        <Button type="submit" className="w-full" size="lg" loading={isSubmitting}>
+        <Button type="submit" variant="gradient" className="w-full" size="lg" loading={isSubmitting}>
           {editExpense ? 'Lưu thay đổi' : 'Thêm chi tiêu'}
         </Button>
       </form>

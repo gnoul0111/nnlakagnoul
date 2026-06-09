@@ -27,7 +27,7 @@ export function AiSummaryWidget({ monthKey, className }: AiSummaryWidgetProps) {
     )}>
       {/* Idle — gradient banner CTA */}
       {summaryStatus === 'idle' && (
-        <div className="rounded-[10px] bg-[hsl(263_70%_10%/0.85)] dark:bg-[hsl(240_25%_9%/0.9)] p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="rounded-[10px] bg-[hsl(263_70%_10%/0.85)] dark:bg-background/90 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-base">✨</span>
