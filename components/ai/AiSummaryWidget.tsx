@@ -22,22 +22,22 @@ export function AiSummaryWidget({ monthKey, className }: AiSummaryWidgetProps) {
       'rounded-xl overflow-hidden',
       hasSummary || isLoading || summaryStatus === 'error'
         ? 'border border-border bg-card p-4 space-y-3'
-        : 'bg-brand-gradient p-[1px]',
+        : 'border border-primary/30 bg-card p-4',
       className,
     )}>
-      {/* Idle — gradient banner CTA */}
+      {/* Idle — CTA */}
       {summaryStatus === 'idle' && (
-        <div className="rounded-[10px] bg-[hsl(263_70%_10%/0.85)] dark:bg-background/90 p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-base">✨</span>
-              <h3 className="text-sm font-semibold text-white">AI Phân tích</h3>
+              <h3 className="text-sm font-semibold text-foreground">AI Phân tích</h3>
             </div>
-            <p className="text-xs text-white/70 leading-relaxed">AI sẽ phân tích thói quen chi tiêu và đưa ra gợi ý giúp bạn quản lý tài chính tốt hơn.</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">AI sẽ phân tích thói quen chi tiêu và đưa ra gợi ý giúp bạn quản lý tài chính tốt hơn.</p>
           </div>
           <button
             onClick={() => generateSummary()}
-            className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white text-sm font-medium transition-colors whitespace-nowrap"
+            className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors whitespace-nowrap"
           >
             <span>Bắt đầu phân tích →</span>
           </button>

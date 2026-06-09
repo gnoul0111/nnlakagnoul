@@ -66,8 +66,8 @@ export function Sidebar() {
                 'flex items-center gap-3 px-2.5 py-2.5 rounded-lg text-sm font-medium transition-colors w-full',
                 'hover:bg-accent hover:text-accent-foreground active:scale-[0.97]',
                 isHighlighted
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground',
+                  ? 'text-primary border-l-2 border-primary pl-[calc(0.625rem-2px)]'
+                  : 'text-muted-foreground border-l-2 border-transparent',
                 collapsed && 'justify-center px-0',
               )}
               title={collapsed ? item.label : undefined}
