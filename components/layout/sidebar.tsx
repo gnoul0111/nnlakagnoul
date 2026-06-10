@@ -66,7 +66,7 @@ export function Sidebar() {
                 'flex items-center gap-3 px-2.5 py-2.5 rounded-lg text-sm font-medium transition-colors w-full',
                 'hover:bg-accent hover:text-accent-foreground active:scale-[0.97]',
                 isHighlighted
-                  ? 'bg-primary/10 text-primary'
+                  ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground',
                 collapsed && 'justify-center px-0',
               )}

@@ -69,7 +69,7 @@ export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden, budgetSlot
       value: hero.income,      valueColor: 'text-success',     trend: hero.incomeTrend,      goodWhenUp: true },
     { key: 'consumption', label: 'Tổng chi', Icon: TrendingDown, ring: 'bg-destructive/15', iconColor: 'text-destructive',
       value: hero.consumption, valueColor: 'text-destructive', trend: hero.consumptionTrend, goodWhenUp: false },
-    { key: 'balance',     label: 'Số dư',    Icon: Wallet,       ring: 'bg-purple-500/15',  iconColor: 'text-purple-500',
+    { key: 'balance',     label: 'Số dư',    Icon: Wallet,       ring: 'bg-sky-500/15',     iconColor: 'text-sky-400',
       value: hero.balance,     valueColor: hero.balance >= 0 ? 'text-foreground' : 'text-destructive', trend: hero.balanceTrend, goodWhenUp: true },
   ]
 
