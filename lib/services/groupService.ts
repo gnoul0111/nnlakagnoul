@@ -291,3 +291,20 @@ export async function setEntryStatus(
     data: { id: entry.id, uid: actorUid, status, payerUid: entry.payerUid, note: entry.note },
   })
 }
+
+/** Kiểm tra group entry đã bị xoá chưa — dùng để unlock khoản orphan trong sổ cá nhân.
+ *  Dùng query pattern giống getGroupEvents (groupId + participants array-contains uid)
+ *  để khớp security rules, filter eventType + data.id client-side tránh cần index mới. */
+export async function isGroupEntryDeleted(groupId: string, entryId: string, uid: string): Promise<boolean> {
+  const ref = collection(db, COLLECTIONS.GROUP_EVENTS)
+  const q = query(
+    ref,
+    where('groupId', '==', groupId),
+    where('participants', 'array-contains', uid),
+  )
+  const snap = await getDocs(q)
+  return snap.docs.some(doc => {
+    const d = doc.data()
+    return d.eventType === GROUP_EVENT_TYPES.GROUP_ENTRY_DELETED && d.data?.id === entryId
+  })
+}

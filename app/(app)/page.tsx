@@ -18,10 +18,11 @@ import { DashboardSkeleton } from '@/components/dashboard/dashboard-skeleton'
 import { QuickAddFab } from '@/components/dashboard/quick-add-fab'
 import { AiSummaryWidget } from '@/components/ai/AiSummaryWidget'
 
+import { CalendarDays } from 'lucide-react'
 import { calcCashflow } from '@/lib/utils/budgetCalc'
 import { computeTotalDeposited } from '@/lib/types/savings'
 import { isDebtOverdue, isDebtUpcoming, computePaidAmount, computeRemaining } from '@/lib/types/debt'
-import { today, prevMonth } from '@/lib/utils/date'
+import { today, prevMonth, endOfMonth, daysDiff } from '@/lib/utils/date'
 
 /** % thay đổi so với kỳ trước. null nếu kỳ trước = 0 (không so được). */
 function pctChange(cur: number, prev: number): number | null {
@@ -89,12 +90,35 @@ export default function DashboardPage() {
     goal:    { value: cashflow.goalSavedTotal,  target: totalGoalTarget, progressPct: totalGoalTarget > 0 ? (totalGoalCurrent / totalGoalTarget) * 100 : 0 },
   }
 
-  // Hiển thị tất cả thẻ phụ (đã bỏ tính năng tùy chỉnh bật/tắt)
-  const cards = SECONDARY_METRICS.map(m => ({ ...m, ...cardValues[m.id] }))
-
   const budgetAmount     = budget ? (budget.spendingAmount ?? budget.amount ?? 0) : 0
   const spendingTotal    = spendingExpenses.reduce((s, e) => s + e.amount, 0)
   const todayStr         = today()
+
+  const remainingDays = isCurrentMonth
+    ? Math.max(1, daysDiff(todayStr, endOfMonth(currentMonth)) + 1)
+    : 0
+  const dailyBudgetAmount = budgetAmount > 0 && remainingDays > 0
+    ? Math.round(Math.max(0, budgetAmount - spendingTotal) / remainingDays)
+    : 0
+
+  const dailyCard = {
+    id: 'daily-budget',
+    label: 'Dự kiến/ngày',
+    icon: CalendarDays,
+    color: 'bg-teal-500/10',
+    iconColor: 'text-teal-500',
+    barColor: 'bg-teal-500',
+    href: '/finance?tab=budget',
+    targetLabel: '',
+    value: dailyBudgetAmount,
+    target: 0,
+    progressPct: 0,
+    subtitle: remainingDays > 0 ? `Còn ${remainingDays} ngày` : undefined,
+  }
+
+  // Hiển thị tất cả thẻ phụ (đã bỏ tính năng tùy chỉnh bật/tắt)
+  const cards = [dailyCard, ...SECONDARY_METRICS.map(m => ({ ...m, ...cardValues[m.id] }))]
+
   const alertDebts       = debts.filter(
     d => !d.deleted && (isDebtOverdue(d, todayStr) || isDebtUpcoming(d, todayStr)),
   )
@@ -116,19 +140,19 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Tổng quan: hero + thẻ phụ */}
+      {/* Tổng quan: hero + ngân sách + thẻ phụ */}
       <StatsGrid
         hero={hero}
         cards={cards}
         moneyHidden={moneyHidden}
         onToggleHidden={() => user && toggleHidden(user.uid)}
-      />
-
-      {/* Budget progress */}
-      <BudgetProgress
-        budgetAmount={budgetAmount}
-        usedAmount={spendingTotal}
-        moneyHidden={moneyHidden}
+        budgetSlot={
+          <BudgetProgress
+            budgetAmount={budgetAmount}
+            usedAmount={spendingTotal}
+            moneyHidden={moneyHidden}
+          />
+        }
       />
 
       {/* Savings plan */}

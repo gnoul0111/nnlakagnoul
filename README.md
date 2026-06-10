@@ -145,6 +145,19 @@ firebase deploy --only firestore:rules
 > Mỗi khi thêm collection mới vào `lib/firebase/firestore.ts`, nhớ thêm rule tương ứng
 > rồi chạy lại lệnh này — thiếu rule → lỗi "Missing or insufficient permissions".
 
+### 7b. Deploy Cloud Functions (khi sửa `functions/src/`)
+
+```bash
+cd functions
+npm run build          # BẮT BUỘC — functions/lib/ được track trong git
+cd ..
+firebase deploy --only functions
+```
+
+> `functions/lib/` (compiled JS) được track trong git để Vercel preview vẫn chạy được.
+> Mỗi khi sửa `functions/src/`, PHẢI build lại trước khi commit/deploy — thiếu bước này →
+> Firebase deploy code cũ.
+
 ### 8. Chạy dev server
 
 ```bash
@@ -188,7 +201,12 @@ Mở [http://localhost:3000](http://localhost:3000).
 │   └── logger.ts        # Structured logging (production-safe)
 │
 ├── hooks/               # Custom React hooks
-├── __tests__/           # Firestore security rules unit tests
+├── __tests__/           # Firestore security rules + Cloud Functions unit tests
+├── functions/           # Firebase Cloud Functions (Node.js)
+│   ├── src/
+│   │   ├── index.ts     # Entry point — export tất cả functions
+│   │   └── groupNotify.ts  # Push notification helpers cho chi tiêu chung
+│   └── lib/             # Compiled output (tracked in git — build trước khi deploy)
 ├── sw.ts                # Service Worker (Serwist)
 └── public/
     ├── manifest.json

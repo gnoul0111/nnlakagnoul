@@ -77,11 +77,17 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
     reset,
     setValue,
     watch,
+    unregister,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { date: defaultDate ?? today() },
   })
+
+  const handleTabChange = (newTab: TabType) => {
+    if (newTab === 'expense') unregister('source')
+    setTab(newTab)
+  }
 
   const handleClose = () => { reset(); onClose() }
 
@@ -143,7 +149,7 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
         {/* Tab switch — luôn hiện đầu tiên để user chọn loại */}
         <div className="flex bg-muted rounded-lg p-1">
           {(['expense', 'income'] as const).map(t => (
-            <button key={t} type="button" onClick={() => setTab(t)}
+            <button key={t} type="button" onClick={() => handleTabChange(t)}
               className={cn(
                 'flex-1 py-1.5 rounded-md text-sm font-medium transition-colors',
                 tab === t ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground',
@@ -181,7 +187,7 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
 
         {tab === 'expense' && (
           <FormField label="Tiêu đề" error={errors.title?.message}>
-            <Input placeholder="Tùy chọn (cà phê, xăng...)" {...register('title')} />
+            <Input placeholder="VD: Ăn trưa, Xăng xe..." {...register('title')} />
           </FormField>
         )}
 
@@ -191,8 +197,8 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
           </FormField>
         )}
 
-        <FormField label="Số tiền" error={errors.amount?.message} required>
-          <AmountInput placeholder="0" className="text-lg font-semibold" autoFocus {...register('amount')} />
+        <FormField label="Số tiền (₫)" error={errors.amount?.message} required>
+          <AmountInput placeholder="0" autoFocus {...register('amount')} />
         </FormField>
 
         <div className="grid grid-cols-2 gap-3">
@@ -204,8 +210,8 @@ export function QuickAddModal({ open, onClose, defaultDate, defaultTab = 'expens
           </FormField>
         </div>
 
-        <Button type="submit" className="w-full" size="lg" loading={isSubmitting || isPending}>
-          Lưu
+        <Button type="submit" variant="gradient" className="w-full" size="lg" loading={isSubmitting || isPending}>
+          {tab === 'expense' ? 'Thêm chi tiêu' : 'Thêm thu nhập'}
         </Button>
       </form>
     </Modal>

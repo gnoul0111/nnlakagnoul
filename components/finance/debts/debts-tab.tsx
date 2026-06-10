@@ -102,9 +102,17 @@ export function DebtsTab() {
   const lendDebts   = active.filter(d => d.type === 'lend')
   const borrowDebts = active.filter(d => d.type === 'borrow')
   const lendActive    = sortActive(lendDebts.filter(d => !isDebtSettled(d)))
-  const lendSettled   = lendDebts.filter(d => isDebtSettled(d))
+  const lendSettled   = lendDebts.filter(d => isDebtSettled(d)).sort((a, b) => {
+    const lastA = a.payments.reduce((mx, p) => p.date > mx ? p.date : mx, a.date ?? '')
+    const lastB = b.payments.reduce((mx, p) => p.date > mx ? p.date : mx, b.date ?? '')
+    return lastB > lastA ? 1 : lastB < lastA ? -1 : 0
+  })
   const borrowActive  = sortActive(borrowDebts.filter(d => !isDebtSettled(d)))
-  const borrowSettled = borrowDebts.filter(d => isDebtSettled(d))
+  const borrowSettled = borrowDebts.filter(d => isDebtSettled(d)).sort((a, b) => {
+    const lastA = a.payments.reduce((mx, p) => p.date > mx ? p.date : mx, a.date ?? '')
+    const lastB = b.payments.reduce((mx, p) => p.date > mx ? p.date : mx, b.date ?? '')
+    return lastB > lastA ? 1 : lastB < lastA ? -1 : 0
+  })
   const [showLendSettled,   setShowLendSettled]   = useState(false)
   const [showBorrowSettled, setShowBorrowSettled] = useState(false)
 
@@ -426,7 +434,7 @@ export function DebtsTab() {
           <FormField label="Ghi chú">
             <Input placeholder="Tùy chọn" {...df.register('note')} />
           </FormField>
-          <Button type="submit" className="w-full" size="lg" loading={savingDebt}>
+          <Button type="submit" variant="gradient" className="w-full" size="lg" loading={savingDebt}>
             {debtForm.edit ? 'Lưu thay đổi' : 'Thêm khoản nợ'}
           </Button>
         </form>
@@ -450,7 +458,7 @@ export function DebtsTab() {
             <input type="checkbox" checked={addToExpenses} onChange={e => setAddToExpenses(e.target.checked)} className="w-4 h-4 rounded accent-primary" />
             Ghi vào chi tiêu
           </label>
-          <Button type="submit" className="w-full" size="lg" loading={savingPayment}>Lưu lần trả</Button>
+          <Button type="submit" variant="gradient" className="w-full" size="lg" loading={savingPayment}>Lưu lần trả</Button>
         </form>
       </Modal>
 

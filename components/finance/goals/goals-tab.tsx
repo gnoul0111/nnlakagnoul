@@ -308,7 +308,7 @@ export function GoalsTab() {
               <DatePicker value={gf.watch('deadline') ?? ''} onChange={v => gf.setValue('deadline', v)} />
             </FormField>
           </div>
-          <Button type="submit" className="w-full" size="lg" loading={savingGoal}>
+          <Button type="submit" variant="gradient" className="w-full" size="lg" loading={savingGoal}>
             {goalForm.edit ? 'Lưu thay đổi' : 'Tạo mục tiêu'}
           </Button>
         </form>
@@ -333,7 +333,7 @@ export function GoalsTab() {
               className="w-4 h-4 rounded border-border accent-primary" />
             Ghi vào chi tiêu
           </label>
-          <Button type="submit" className="w-full" size="lg" loading={savingDeposit}>Nạp tiền</Button>
+          <Button type="submit" variant="gradient" className="w-full" size="lg" loading={savingDeposit}>Nạp tiền</Button>
         </form>
       </Modal>
 

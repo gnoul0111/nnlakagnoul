@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils/cn'
 
 const variants = {
   primary:     'bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary',
+  gradient:    'bg-brand-gradient text-white hover:opacity-90 focus-visible:ring-primary shadow-md shadow-primary/25',
   secondary:   'bg-secondary text-secondary-foreground hover:bg-secondary/80',
   destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
   outline:     'border border-border bg-transparent hover:bg-accent hover:text-accent-foreground',

@@ -104,29 +104,70 @@ curl -X POST `
 4. Chờ ~1-2 phút → nhận thông báo "🎉 Chi Tiêu — Có bản cập nhật mới!"
 5. Bấm vào thông báo → mở app → thấy nút "Cập nhật" trong Settings
 
-## 6b. Thông báo nhóm (chi tiêu chung)
+## 6b. Thông báo nhóm
 
-Function `groupEventNotify` tự gửi thông báo cho thành viên nhóm khi có khoản
-chung mới / bị sửa (đổi tiền hoặc cách chia) / hoặc ai đó bấm "Đã xử lý" (báo
-riêng người trả). Trigger Firestore `onCreate` trên `group_events` — KHÔNG cần
-secret, KHÔNG cần env mới.
+3 Cloud Functions — **KHÔNG cần secret, KHÔNG cần env mới**:
 
-Deploy (lần đầu hoặc khi sửa logic):
+| Function | Trigger | Sự kiện |
+|---|---|---|
+| `groupEventNotify` | `onCreate` `group_events/{eventId}` | Khoản chung: thêm / sửa / xoá / đổi trạng thái |
+| `groupMemberJoinedNotify` | `onUpdate` `groups/{groupId}` | Thành viên mới vào nhóm |
+| `groupDeletedNotify` | `onDelete` `groups/{groupId}` | Chủ nhóm xoá nhóm |
+
+### groupEventNotify — khoản chung
+
+| eventType | Ai nhận | Điều kiện bổ sung |
+|---|---|---|
+| `GROUP_ENTRY_ADDED` | Mọi participant trừ actor | — |
+| `GROUP_ENTRY_UPDATED` | Mọi participant trừ actor | Chỉ khi `data.notifyFinancial !== false` (sửa tiền/cách chia) |
+| `GROUP_ENTRY_DELETED` | Mọi participant trừ actor | — |
+| `GROUP_ENTRY_STATUS_SET` | Chỉ `data.payerUid` | `status === 'done'` hoặc `'skipped'` và payer ≠ actor |
+
+Dedup key: `group_evt_{eventId}` (per-user, lưu trong `alert_log`).
+
+### groupMemberJoinedNotify — thành viên mới
+
+Khi `memberUids` tăng → báo tất cả thành viên cũ (trừ người vừa vào).
+Dedup key: `group_joined_{groupId}_{newUid}` (per-user).
+
+### groupDeletedNotify — xoá nhóm
+
+Khi doc `groups/{groupId}` bị xoá → báo tất cả `memberUids` trong snapshot.
+Dedup key: `group_deleted_{groupId}` (per-user).
+
+### Toggle
+
+`user_settings.groupNotifEnabled` (boolean, default `true` khi field không tồn tại).
+Gated dưới `notifEnabled` — tắt thông báo chung → thông báo nhóm cũng tắt.
+Trong app: **Cài đặt → Thông báo → "Thông báo nhóm"**.
+
+### Files
+
+- `functions/src/groupNotify.ts` — logic thuần (không import firebase), unit-test được độc lập
+- `functions/src/index.ts` — Function 8, 9, 10: I/O Firestore + gọi FCM
+- `__tests__/groupNotify.test.ts` — unit tests cho `getGroupRecipients` + `buildGroupNotifBody`
+
+### Deploy
+
 ```powershell
 cd functions
 npm run build
 cd ..
-firebase deploy --only functions:groupEventNotify
+firebase deploy --only functions:groupEventNotify,functions:groupMemberJoinedNotify,functions:groupDeletedNotify
 ```
-
-Bật/tắt: trong app → Cài đặt → Thông báo → "Thông báo nhóm" (mặc định bật khi
-đã bật thông báo). Gửi cho mọi thiết bị của thành viên, dùng chung pipeline FCM.
 
 ## 7. Debug
 
 Xem log Cloud Function realtime:
 ```powershell
 firebase functions:log --only notifyNewVersion
+```
+
+Log thông báo nhóm:
+```powershell
+firebase functions:log --only groupEventNotify
+firebase functions:log --only groupMemberJoinedNotify
+firebase functions:log --only groupDeletedNotify
 ```
 
 Xem danh sách secrets:
@@ -148,3 +189,4 @@ firebase deploy --only functions:notifyNewVersion
 | `500 Server not configured` | Chưa set `NOTIFY_SECRET` | Chạy `firebase functions:secrets:set` |
 | `0 sent` | User chưa có `fcmToken` hoặc `notifEnabled=false` | User phải bật thông báo trong Settings |
 | Function không có quyền đọc secret | Deploy chưa update IAM | Chạy `firebase deploy --only functions:notifyNewVersion` |
+| Thông báo nhóm không gửi | `groupNotifEnabled=false` hoặc không có token | Kiểm tra `user_settings.groupNotifEnabled` + log function |

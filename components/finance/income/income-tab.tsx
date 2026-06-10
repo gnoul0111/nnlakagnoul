@@ -82,7 +82,7 @@ function IncomeFormModal({ open, onClose }: { open: boolean; onClose: () => void
             <Input placeholder="Tùy chọn" {...register('note')} />
           </FormField>
         </div>
-        <Button type="submit" className="w-full" size="lg" loading={isPending}>Thêm thu nhập</Button>
+        <Button type="submit" variant="gradient" className="w-full" size="lg" loading={isPending}>Thêm thu nhập</Button>
       </form>
     </Modal>
   )

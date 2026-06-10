@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import Link from 'next/link'
 import {
   Eye, EyeOff, TrendingUp, TrendingDown, Wallet,
@@ -32,6 +33,7 @@ interface SecondaryCardData {
   value:       number
   target:      number
   progressPct: number
+  subtitle?:   string
 }
 
 interface StatsGridProps {
@@ -39,6 +41,7 @@ interface StatsGridProps {
   cards:          SecondaryCardData[]
   moneyHidden:    boolean
   onToggleHidden: () => void
+  budgetSlot?:    React.ReactNode
 }
 
 // ─── Trend line (% so với tháng trước) ─────────────────────────────────────────
@@ -60,13 +63,13 @@ function TrendLine({ pct, goodWhenUp }: { pct: number | null; goodWhenUp: boolea
 
 // ─── StatsGrid ────────────────────────────────────────────────────────────────
 
-export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden }: StatsGridProps) {
+export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden, budgetSlot }: StatsGridProps) {
   const heroItems = [
     { key: 'income',      label: 'Tổng thu', Icon: TrendingUp,   ring: 'bg-success/15',     iconColor: 'text-success',
       value: hero.income,      valueColor: 'text-success',     trend: hero.incomeTrend,      goodWhenUp: true },
     { key: 'consumption', label: 'Tổng chi', Icon: TrendingDown, ring: 'bg-destructive/15', iconColor: 'text-destructive',
       value: hero.consumption, valueColor: 'text-destructive', trend: hero.consumptionTrend, goodWhenUp: false },
-    { key: 'balance',     label: 'Số dư',    Icon: Wallet,       ring: 'bg-purple-500/15',  iconColor: 'text-purple-500',
+    { key: 'balance',     label: 'Số dư',    Icon: Wallet,       ring: 'bg-sky-500/15',     iconColor: 'text-sky-400',
       value: hero.balance,     valueColor: hero.balance >= 0 ? 'text-foreground' : 'text-destructive', trend: hero.balanceTrend, goodWhenUp: true },
   ]
 
@@ -96,49 +99,42 @@ export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden }: StatsGri
         </button>
       </div>
 
-      {/* ─── HERO ─────────────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-border rounded-2xl p-4 sm:p-5">
-        {/* Thu / Chi / Số dư */}
-        <div className="grid grid-cols-1 sm:grid-cols-3">
-          {heroItems.map((it, i) => (
-            <div
-              key={it.key}
-              className={cn(
-                'flex items-center gap-3 py-3 sm:py-1',
-                i > 0 && 'border-t border-border sm:border-t-0 sm:border-l sm:pl-5',
-              )}
-            >
-              <div className={cn('w-11 h-11 rounded-full flex items-center justify-center shrink-0', it.ring)}>
-                <it.Icon className={cn('w-5 h-5', it.iconColor)} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{it.label}</p>
-                <p className={cn('text-lg sm:text-xl font-bold leading-tight truncate', it.valueColor)}>
-                  <AnimatedNumber value={it.value} hidden={moneyHidden} />
-                </p>
-                <TrendLine pct={it.trend} goodWhenUp={it.goodWhenUp} />
+      {/* ─── HERO — 4 cards riêng (2×2 mobile, 4 cols desktop) ─────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {heroItems.map(it => (
+          <div key={it.key} className="bg-card border border-border rounded-2xl p-3.5 sm:p-4 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{it.label}</p>
+              <div className={cn('w-8 h-8 rounded-full flex items-center justify-center shrink-0', it.ring)}>
+                <it.Icon className={cn('w-4 h-4', it.iconColor)} />
               </div>
             </div>
-          ))}
-        </div>
+            <p className={cn('text-xl font-bold leading-tight truncate', it.valueColor)}>
+              <AnimatedNumber value={it.value} hidden={moneyHidden} />
+            </p>
+            <TrendLine pct={it.trend} goodWhenUp={it.goodWhenUp} />
+          </div>
+        ))}
 
-        {/* Thanh tỉ lệ chi tiêu / thu nhập (gradient xanh→đỏ) */}
-        <div className="mt-4 pt-4 border-t border-border space-y-1.5">
+        {/* Card 4: Tỷ lệ chi/thu */}
+        <div className="bg-card border border-border rounded-2xl p-3.5 sm:p-4 flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Tỷ lệ chi tiêu / thu nhập</span>
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Tỷ lệ chi/thu</p>
             <span className={cn('text-sm font-bold', ratioStatus.color)}>{Math.round(hero.spendRatio)}%</span>
           </div>
-          <div className="relative h-2.5 rounded-full overflow-hidden bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500">
-            {/* Mask phần chưa đạt → chỉ hiện gradient tới spendRatio% */}
-            <div className="absolute inset-y-0 right-0 bg-muted" style={{ width: `${100 - ratioFill}%` }} />
+          <div className="relative h-2 rounded-full overflow-hidden bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500 mt-1">
+            <div className="absolute inset-y-0 right-0 bg-muted/80" style={{ width: `${100 - ratioFill}%` }} />
           </div>
-          <p className={cn('text-[11px] text-right', ratioStatus.color)}>{ratioStatus.text}</p>
+          <p className={cn('text-[11px]', ratioStatus.color)}>{ratioStatus.text}</p>
         </div>
       </div>
 
+      {/* ─── Budget slot (inject từ parent) ──────────────────────────────────────── */}
+      {budgetSlot}
+
       {/* ─── Thẻ phụ (bật/tắt qua Tùy chỉnh) ───────────────────────────────────── */}
       {cards.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {cards.map(c => {
             const Icon = c.icon
             return (
@@ -160,7 +156,7 @@ export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden }: StatsGri
                   <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                 </div>
 
-                {c.target > 0 && (
+                {c.target > 0 ? (
                   <>
                     <div className="mt-3 flex items-center justify-between text-[11px]">
                       <span className="text-muted-foreground truncate">
@@ -177,7 +173,9 @@ export function StatsGrid({ hero, cards, moneyHidden, onToggleHidden }: StatsGri
                       />
                     </div>
                   </>
-                )}
+                ) : c.subtitle ? (
+                  <p className="mt-2 text-[11px] text-muted-foreground">{c.subtitle}</p>
+                ) : null}
               </Link>
             )
           })}

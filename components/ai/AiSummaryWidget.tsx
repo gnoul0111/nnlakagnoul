@@ -18,24 +18,49 @@ export function AiSummaryWidget({ monthKey, className }: AiSummaryWidgetProps) {
   const hasSummary = summaryStatus === 'done' && !!summary
 
   return (
-    <div className={cn('rounded-xl border border-border bg-card p-4 space-y-3', className)}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-base">✨</span>
-          <h3 className="text-sm font-semibold text-foreground">AI Phân tích</h3>
-        </div>
-
-        {/* Nút tạo / tạo lại */}
-        {!isLoading && (
+    <div className={cn(
+      'rounded-xl overflow-hidden',
+      hasSummary || isLoading || summaryStatus === 'error'
+        ? 'border border-border bg-card p-4 space-y-3'
+        : 'border border-primary/30 bg-card p-4',
+      className,
+    )}>
+      {/* Idle — CTA */}
+      {summaryStatus === 'idle' && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-base">✨</span>
+              <h3 className="text-sm font-semibold text-foreground">AI Phân tích</h3>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">AI sẽ phân tích thói quen chi tiêu và đưa ra gợi ý giúp bạn quản lý tài chính tốt hơn.</p>
+          </div>
           <button
-            onClick={() => generateSummary(hasSummary)}
-            className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+            onClick={() => generateSummary()}
+            className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-gradient hover:opacity-90 text-white text-sm font-medium transition-opacity whitespace-nowrap shadow-sm shadow-primary/20"
           >
-            {hasSummary ? 'Tạo lại' : 'Tạo tóm tắt'}
+            <span>Bắt đầu phân tích →</span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Header — khi đã có summary hoặc đang load */}
+      {(hasSummary || isLoading || summaryStatus === 'error') && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-base">✨</span>
+            <h3 className="text-sm font-semibold text-foreground">AI Phân tích</h3>
+          </div>
+          {!isLoading && (
+            <button
+              onClick={() => generateSummary(hasSummary)}
+              className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              {hasSummary ? 'Tạo lại' : 'Tạo tóm tắt'}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Loading state */}
       {isLoading && (
@@ -48,17 +73,6 @@ export function AiSummaryWidget({ monthKey, className }: AiSummaryWidgetProps) {
       {/* Error state */}
       {summaryStatus === 'error' && summaryError && (
         <p className="text-xs text-destructive">{summaryError}</p>
-      )}
-
-      {/* Idle — CTA */}
-      {summaryStatus === 'idle' && (
-        <button
-          onClick={() => generateSummary()}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-primary/5 text-sm text-muted-foreground hover:text-primary transition-colors"
-        >
-          <MicIcon />
-          <span>Nghe AI tóm tắt tháng này</span>
-        </button>
       )}
 
       {/* Summary text */}

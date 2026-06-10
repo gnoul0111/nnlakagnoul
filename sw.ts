@@ -116,6 +116,14 @@ const serwist = new Serwist({
   ],
 })
 
+// Suppress Serwist's internal "no-response" unhandled rejection — xảy ra khi
+// navigation request đua với SW activation (skipWaiting+clientsClaim); app vẫn
+// load đúng nhưng Serwist log lỗi thừa trước khi handlerDidError chạy kịp.
+self.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+  const msg: string = (event.reason as { message?: string })?.message ?? ''
+  if (msg.startsWith('no-response:')) event.preventDefault()
+})
+
 // PHẢI đăng ký TRƯỚC serwist.addEventListeners(): với request auth của Firebase,
 // gọi stopImmediatePropagation() → listener fetch của Serwist (đăng ký sau) không
 // chạy → không respondWith → trình duyệt tự fetch native (auth chạy đúng).
