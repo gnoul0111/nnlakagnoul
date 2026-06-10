@@ -158,6 +158,28 @@
   }
 }
 
+/* ─── Dark mode gradient surfaces ───────────────────────────────────────────── */
+
+html.dark {
+  /* Page background: subtle purple corner → navy → neutral dark */
+  background: linear-gradient(160deg, hsl(263 22% 9%) 0%, hsl(230 15% 8%) 55%, hsl(0 0% 7%) 100%);
+}
+
+html.dark body {
+  /* iOS home-indicator zone: approximate gradient midpoint */
+  background: linear-gradient(160deg, hsl(263 15% 14%) 0%, hsl(220 8% 12%) 55%, hsl(0 0% 11%) 100%);
+}
+
+html.dark .bg-card {
+  /* Cards/sidebar/topbar: lighter surface with subtle purple tint at top */
+  background: linear-gradient(145deg, hsl(263 8% 16%) 0%, hsl(0 0% 11%) 100%);
+}
+
+html.dark .bg-background {
+  /* App-shell wrapper background */
+  background: linear-gradient(160deg, hsl(263 22% 9%) 0%, hsl(230 15% 8%) 55%, hsl(0 0% 7%) 100%);
+}
+
 /* ─── Brand gradient utilities ───────────────────────────────────────────────── */
 
 @layer utilities {
