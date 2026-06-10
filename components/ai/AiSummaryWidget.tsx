@@ -37,7 +37,7 @@ export function AiSummaryWidget({ monthKey, className }: AiSummaryWidgetProps) {
           </div>
           <button
             onClick={() => generateSummary()}
-            className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors whitespace-nowrap"
+            className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-gradient hover:opacity-90 text-white text-sm font-medium transition-opacity whitespace-nowrap shadow-sm shadow-primary/20"
           >
             <span>Bắt đầu phân tích →</span>
           </button>
