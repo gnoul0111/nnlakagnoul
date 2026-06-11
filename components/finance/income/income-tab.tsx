@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Plus, Trash2 } from 'lucide-react'
@@ -26,63 +26,116 @@ import { cn } from '@/lib/utils/cn'
 
 // ─── Form Modal ───────────────────────────────────────────────────────────────
 
-const schema = z.object({
+const entrySchema = z.object({
   amount: z.string().min(1, 'Nhập số tiền.')
     .refine(v => parseAmount(v) > 0, 'Phải lớn hơn 0.')
-    .refine(v => parseAmount(v) < 999_000_000, 'Số tiền không được vượt quá 999 triệu.'),
-  source: z.string().min(1, 'Nhập nguồn thu.'),
+    .refine(v => parseAmount(v) <= 999_000_000, 'Tối đa 999 triệu.'),
+  source: z.string().min(1, 'Nhập nguồn thu.').max(100),
   date:   z.string().min(1, 'Chọn ngày.'),
   note:   z.string().optional(),
 })
-type FormValues = z.infer<typeof schema>
+
+const multiSchema = z.object({
+  entries: z.array(entrySchema).min(1),
+})
+type MultiFormValues = z.infer<typeof multiSchema>
+
+const defaultEntry = { amount: '', source: 'Lương', date: today(), note: '' }
 
 function IncomeFormModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { append, isPending } = useAppend()
+  const { appendBackgroundBatch } = useAppend()
   const toast  = useToast()
   const user   = useAuthStore(s => s.user)
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { date: today(), source: 'Lương' },
+
+  const { control, register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<MultiFormValues>({
+    resolver: zodResolver(multiSchema),
+    defaultValues: { entries: [{ ...defaultEntry, date: today() }] },
   })
 
-  const onSubmit = async (values: FormValues) => {
-    const date   = values.date
+  const { fields, append: appendField, remove } = useFieldArray({ control, name: 'entries' })
+
+  const onSubmit = (values: MultiFormValues) => {
     // userId BẮT BUỘC phải có trong data để ownership check hoạt động đúng
-    // (INCOME_DELETED kiểm tra state.incomes[idx].userId === event.userId)
     const userId = user?.uid ?? ''
-    try {
-      await append(EVENT_TYPES.INCOME_ADDED, {
-        id: newIncomeId(), userId, amount: parseAmount(values.amount),
-        source: values.source, date,
-        month: getMonthFromDateString(date), note: values.note ?? '',
-      })
-      toast.success('Đã thêm thu nhập!')
-      reset({ date: today(), source: 'Lương' })
-      onClose()
-    } catch (err) {
-      console.error('[income] add failed:', err)
-      toast.error('Không lưu được. Kiểm tra kết nối rồi thử lại.')
-    }
+    const batch = values.entries.map(entry => ({
+      eventType: EVENT_TYPES.INCOME_ADDED,
+      data: {
+        id:     newIncomeId(),
+        userId,
+        amount: parseAmount(entry.amount),
+        source: entry.source,
+        date:   entry.date,
+        month:  getMonthFromDateString(entry.date),
+        note:   entry.note ?? '',
+      } as Record<string, unknown>,
+    }))
+    appendBackgroundBatch(batch)
+    const n = batch.length
+    toast.success(n === 1 ? 'Đã thêm thu nhập!' : `Đã thêm ${n} khoản thu nhập!`)
+    reset({ entries: [{ ...defaultEntry, date: today() }] })
+    onClose()
   }
 
   return (
     <Modal variant="center" open={open} onClose={onClose} title="Thêm thu nhập">
       <form onSubmit={handleSubmit(onSubmit)} className="px-4 pb-6 space-y-4">
-        <FormField label="Nguồn thu" error={errors.source?.message} required>
-          <Input placeholder="Lương, Freelance, Thưởng..." autoFocus {...register('source')} />
-        </FormField>
-        <FormField label="Số tiền (₫)" error={errors.amount?.message} required>
-          <AmountInput placeholder="0" {...register('amount')} />
-        </FormField>
-        <div className="grid grid-cols-2 gap-3">
-          <FormField label="Ngày" error={errors.date?.message} required>
-            <DatePicker value={watch('date')} onChange={v => setValue('date', v)} />
-          </FormField>
-          <FormField label="Ghi chú">
-            <Input placeholder="Tùy chọn" {...register('note')} />
-          </FormField>
+        {/* Danh sách khoản */}
+        <div className="space-y-3">
+          {fields.map((field, i) => {
+            const entryErrors = errors.entries?.[i]
+            return (
+              // key=field.id (KHÔNG dùng i) → AmountInput giữ đúng state khi xoá giữa
+              <div key={field.id} className="rounded-xl border border-border bg-card/50 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground">Khoản {i + 1}</span>
+                  {fields.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => remove(i)}
+                      className="w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <FormField label="Nguồn thu" error={entryErrors?.source?.message} required>
+                  <Input placeholder="Lương, Freelance, Thưởng..." {...register(`entries.${i}.source`)} />
+                </FormField>
+
+                <FormField label="Số tiền (₫)" error={entryErrors?.amount?.message} required>
+                  <AmountInput placeholder="0" {...register(`entries.${i}.amount`)} />
+                </FormField>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="Ngày" error={entryErrors?.date?.message} required>
+                    <DatePicker
+                      value={watch(`entries.${i}.date`)}
+                      onChange={v => setValue(`entries.${i}.date`, v)}
+                    />
+                  </FormField>
+                  <FormField label="Ghi chú">
+                    <Input placeholder="Tùy chọn" {...register(`entries.${i}.note`)} />
+                  </FormField>
+                </div>
+              </div>
+            )
+          })}
         </div>
-        <Button type="submit" variant="gradient" className="w-full" size="lg" loading={isPending}>Thêm thu nhập</Button>
+
+        {/* Thêm khoản */}
+        <button
+          type="button"
+          onClick={() => appendField({ ...defaultEntry, date: today() })}
+          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Thêm khoản
+        </button>
+
+        <Button type="submit" variant="gradient" className="w-full" size="lg" loading={isSubmitting}>
+          {fields.length === 1 ? 'Thêm thu nhập' : `Lưu ${fields.length} khoản`}
+        </Button>
       </form>
     </Modal>
   )
