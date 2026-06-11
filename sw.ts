@@ -120,7 +120,11 @@ const serwist = new Serwist({
 // navigation request đua với SW activation (skipWaiting+clientsClaim); app vẫn
 // load đúng nhưng Serwist log lỗi thừa trước khi handlerDidError chạy kịp.
 self.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-  const msg: string = (event.reason as { message?: string })?.message ?? ''
+  // Serwist có thể ném reason dưới dạng string thuần hoặc Error object
+  const reason = event.reason
+  const msg: string = typeof reason === 'string'
+    ? reason
+    : ((reason as { message?: string })?.message ?? '')
   if (msg.startsWith('no-response:')) event.preventDefault()
 })
 
