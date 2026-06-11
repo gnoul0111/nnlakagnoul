@@ -88,7 +88,7 @@ function MultiEntryForm({
 
   const defaultEntry = { amount: '', category: 'food', title: '', date: defaultDate ?? today(), note: '' }
 
-  const { control, register, handleSubmit, setValue, watch, reset, formState: { errors, isSubmitting } } = useForm<MultiFormValues>({
+  const { control, register, handleSubmit, setValue, watch, reset, getValues, formState: { errors, isSubmitting } } = useForm<MultiFormValues>({
     resolver: zodResolver(multiSchema),
     defaultValues: { entries: [defaultEntry] },
   })
@@ -101,14 +101,35 @@ function MultiEntryForm({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultDate])
 
-  // Scanner điền dòng đầu tiên
-  const handleScanResult = useCallback((result: ScanResult) => {
-    if (result.amount !== null) setValue('entries.0.amount',   String(result.amount))
-    if (result.date)            setValue('entries.0.date',     result.date)
-    if (result.category)        setValue('entries.0.category', result.category)
-    if (result.title)           setValue('entries.0.title',    result.title)
-    if (result.note)            setValue('entries.0.note',     result.note)
-  }, [setValue])
+  // Mỗi ScanResult → 1 entry. Nếu entry đầu rỗng thì điền vào đó, còn lại append.
+  const handleMultiScanResult = useCallback((results: ScanResult[]) => {
+    if (results.length === 0) return
+    const first = getValues('entries.0')
+    const firstEmpty = !first?.amount && !first?.title
+
+    if (firstEmpty && results[0]) {
+      const r = results[0]
+      setValue('entries.0.amount',   r.amount !== null ? String(r.amount) : '')
+      setValue('entries.0.date',     r.date ?? today())
+      setValue('entries.0.category', r.category)
+      setValue('entries.0.title',    r.title)
+      setValue('entries.0.note',     r.note)
+    }
+
+    const rest = firstEmpty ? results.slice(1) : results
+    if (rest.length > 0) {
+      appendField(
+        rest.map(r => ({
+          amount:   r.amount !== null ? String(r.amount) : '',
+          category: r.category,
+          title:    r.title,
+          date:     r.date ?? today(),
+          note:     r.note,
+        })),
+        { shouldFocus: false },
+      )
+    }
+  }, [getValues, setValue, appendField])
 
   const onSubmit = (values: MultiFormValues) => {
     const userId = user?.uid ?? ''
@@ -134,8 +155,8 @@ function MultiEntryForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="px-4 pb-6 space-y-4">
-      {/* AI Scanner — luôn ở đầu, điền dòng đầu tiên */}
-      <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting} />
+      {/* AI Scanner — mỗi ảnh → 1 khoản riêng */}
+      <ReceiptScanner multiple onMultiResult={handleMultiScanResult} disabled={isSubmitting} />
 
       {/* Danh sách khoản */}
       <div className="space-y-3">
@@ -201,7 +222,7 @@ function MultiEntryForm({
       {/* Thêm khoản */}
       <button
         type="button"
-        onClick={() => appendField({ ...defaultEntry, date: today() })}
+        onClick={() => appendField({ ...defaultEntry, date: today() }, { shouldFocus: false })}
         className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
       >
         <Plus className="w-4 h-4" />

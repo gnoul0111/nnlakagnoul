@@ -126,7 +126,7 @@ function IncomeFormModal({ open, onClose }: { open: boolean; onClose: () => void
         {/* Thêm khoản */}
         <button
           type="button"
-          onClick={() => appendField({ ...defaultEntry, date: today() })}
+          onClick={() => appendField({ ...defaultEntry, date: today() }, { shouldFocus: false })}
           className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
         >
           <Plus className="w-4 h-4" />

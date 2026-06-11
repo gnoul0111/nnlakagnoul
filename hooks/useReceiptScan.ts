@@ -55,63 +55,114 @@ async function compressImage(file: File, maxDim = 1280, quality = 0.82): Promise
   })
 }
 
+// Module-level function — dùng được trong Promise.allSettled (không cần hook context)
+export async function scanReceipt(file: File): Promise<ScanResult> {
+  const blob = await compressImage(file)
+  const formData = new FormData()
+  formData.append('image', blob, 'receipt.jpg')
+  const headers = await authHeader()
+  const res = await fetch('/api/ai/scan-receipt', { method: 'POST', headers, body: formData })
+  const data = await res.json()
+  if (!res.ok || data.error) {
+    throw new Error(data.error ?? 'Không nhận diện được hóa đơn.')
+  }
+  return {
+    amount:   data.amount   ?? null,
+    date:     data.date     ?? null,
+    category: data.category ?? 'other',
+    title:    data.title    ?? '',
+    note:     data.note     ?? '',
+  }
+}
+
+export interface ScanSummary {
+  success: number
+  fail:    number
+}
+
+export interface MultiProgress {
+  done:  number
+  total: number
+}
+
+export const MAX_MULTI_SCAN = 5
+
 export function useReceiptScan() {
-  const [status,  setStatus]  = useState<ScanStatus>('idle')
-  const [result,  setResult]  = useState<ScanResult | null>(null)
-  const [errorMsg,setErrorMsg]= useState<string | null>(null)
+  const [status,       setStatus]       = useState<ScanStatus>('idle')
+  const [result,       setResult]       = useState<ScanResult | null>(null)
+  const [errorMsg,     setErrorMsg]     = useState<string | null>(null)
+  const [multiProgress,setMultiProgress]= useState<MultiProgress | null>(null)
+  const [scanSummary,  setScanSummary]  = useState<ScanSummary | null>(null)
 
   const scan = useCallback(async (file: File): Promise<ScanResult | null> => {
     setStatus('scanning')
     setResult(null)
     setErrorMsg(null)
+    setScanSummary(null)
+    setMultiProgress(null)
 
     try {
-      // Luôn compress để đảm bảo định dạng JPEG chuẩn (HEIC từ iPhone sẽ được convert)
-      const blob = await compressImage(file)
-
-      const formData = new FormData()
-      formData.append('image', blob, 'receipt.jpg')
-
-      const headers = await authHeader()
-      const res = await fetch('/api/ai/scan-receipt', {
-        method:  'POST',
-        headers,
-        body:    formData,
-      })
-
-      const data = await res.json()
-
-      if (!res.ok || data.error) {
-        const msg = data.error ?? 'Không nhận diện được hóa đơn.'
-        setErrorMsg(msg)
-        setStatus('error')
-        return null
-      }
-
-      const scanResult: ScanResult = {
-        amount:   data.amount   ?? null,
-        date:     data.date     ?? null,
-        category: data.category ?? 'other',
-        title:    data.title    ?? '',
-        note:     data.note     ?? '',
-      }
-      setResult(scanResult)
+      const r = await scanReceipt(file)
+      setResult(r)
       setStatus('done')
-      return scanResult
-
+      setScanSummary({ success: 1, fail: 0 })
+      return r
     } catch (err) {
-      console.error('[useReceiptScan]', err)
-      setErrorMsg('Lỗi kết nối. Vui lòng thử lại.')
+      const msg = err instanceof Error ? err.message : 'Lỗi kết nối. Vui lòng thử lại.'
+      setErrorMsg(msg)
       setStatus('error')
       return null
     }
+  }, [])
+
+  // Scan tối đa MAX_MULTI_SCAN ảnh song song; trả về các kết quả thành công.
+  // Mỗi ảnh = 1 API call độc lập → partial failure xử lý tự nhiên qua allSettled.
+  const scanMany = useCallback(async (files: File[]): Promise<ScanResult[]> => {
+    if (files.length === 0) return []
+    const capped = files.slice(0, MAX_MULTI_SCAN)
+
+    setStatus('scanning')
+    setResult(null)
+    setErrorMsg(null)
+    setScanSummary(null)
+    setMultiProgress({ done: 0, total: capped.length })
+
+    const settled = await Promise.allSettled(
+      capped.map(async file => {
+        const r = await scanReceipt(file)
+        setMultiProgress(p => p ? { ...p, done: p.done + 1 } : p)
+        return r
+      })
+    )
+
+    setMultiProgress(null)
+
+    const successes = settled
+      .filter((r): r is PromiseFulfilledResult<ScanResult> => r.status === 'fulfilled')
+      .map(r => r.value)
+    const failCount = settled.filter(r => r.status === 'rejected').length
+
+    setScanSummary({ success: successes.length, fail: failCount })
+
+    if (successes.length === 0) {
+      setStatus('error')
+      setErrorMsg(capped.length === 1
+        ? 'Không nhận diện được hóa đơn.'
+        : 'Không nhận diện được ảnh nào.')
+    } else {
+      setStatus('done')
+    }
+
+    return successes
   }, [])
 
   const reset = useCallback(() => {
     setStatus('idle')
     setResult(null)
     setErrorMsg(null)
+    setMultiProgress(null)
+    setScanSummary(null)
   }, [])
 
-  return { status, result, errorMsg, scan, reset }
+  return { status, result, errorMsg, multiProgress, scanSummary, scan, scanMany, reset }
 }
