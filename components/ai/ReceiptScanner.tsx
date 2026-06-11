@@ -2,37 +2,55 @@
 
 import { useRef } from 'react'
 import { cn } from '@/lib/utils/cn'
-import { useReceiptScan, type ScanResult } from '@/hooks/useReceiptScan'
+import { useReceiptScan, MAX_MULTI_SCAN, type ScanResult } from '@/hooks/useReceiptScan'
 
 interface ReceiptScannerProps {
-  onResult:  (result: ScanResult) => void
+  // Single-scan mode (default): called với 1 result
+  onResult?: (result: ScanResult) => void
+  // Multi-scan mode: called với mảng results (kể cả khi chỉ 1 ảnh)
+  onMultiResult?: (results: ScanResult[]) => void
+  // Bật chế độ chọn nhiều ảnh. Khi true, luôn gọi onMultiResult.
+  multiple?: boolean
   disabled?: boolean
   className?: string
 }
 
-export function ReceiptScanner({ onResult, disabled, className }: ReceiptScannerProps) {
+export function ReceiptScanner({ onResult, onMultiResult, multiple, disabled, className }: ReceiptScannerProps) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const { status, errorMsg, scan, reset } = useReceiptScan()
+  const { status, errorMsg, multiProgress, scanSummary, scan, scanMany, reset } = useReceiptScan()
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    // Reset input value để có thể chọn lại cùng file sau
-    e.target.value = ''
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+    e.target.value = '' // reset để chọn lại cùng file được
 
-    const result = await scan(file)
-    if (result) onResult(result)
+    if (multiple) {
+      // Multi mode: luôn qua scanMany, kể cả khi chỉ 1 file
+      const results = await scanMany(files)
+      if (results.length > 0) onMultiResult?.(results)
+    } else {
+      // Single mode: hành vi cũ
+      const result = await scan(files[0])
+      if (result) onResult?.(result)
+    }
   }
 
   const isScanning = status === 'scanning'
 
+  // Label hiển thị khi scan xong
+  const doneLabel = (() => {
+    if (!scanSummary || scanSummary.success === 1) return 'Đã điền từ hóa đơn — quét lại?'
+    if (scanSummary.fail > 0) return `Đã scan ${scanSummary.success}/${scanSummary.success + scanSummary.fail} ảnh — quét lại?`
+    return `Đã điền ${scanSummary.success} hóa đơn — quét lại?`
+  })()
+
   return (
     <div className={cn('w-full', className)}>
-      {/* 1 input duy nhất, KHÔNG capture → bấm vào ra đủ option: chụp ảnh / thư viện / tệp */}
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
+        multiple={multiple}
         className="hidden"
         onChange={handleFileChange}
         disabled={isScanning || disabled}
@@ -54,19 +72,27 @@ export function ReceiptScanner({ onResult, disabled, className }: ReceiptScanner
           {status === 'done' ? (
             <>
               <CheckIcon />
-              <span>Đã điền từ hóa đơn — quét lại?</span>
+              <span>{doneLabel}</span>
             </>
           ) : (
             <>
               <CameraIcon />
-              <span>Chụp / chọn hóa đơn để AI điền</span>
+              <span>
+                {multiple
+                  ? `Chụp / chọn tối đa ${MAX_MULTI_SCAN} hóa đơn để AI điền`
+                  : 'Chụp / chọn hóa đơn để AI điền'}
+              </span>
             </>
           )}
         </button>
       ) : status === 'scanning' ? (
         <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 text-sm text-primary">
           <SpinnerIcon />
-          <span>Đang nhận diện hóa đơn...</span>
+          <span>
+            {multiProgress && multiProgress.total > 1
+              ? `Đang scan ${multiProgress.done}/${multiProgress.total} ảnh...`
+              : 'Đang nhận diện hóa đơn...'}
+          </span>
         </div>
       ) : (
         // error state

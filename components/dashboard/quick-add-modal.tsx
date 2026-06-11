@@ -76,21 +76,42 @@ function ExpenseEntries({
 
   const defaultEntry = { amount: '', category: 'food', title: '', date: defaultDate ?? today(), note: '' }
 
-  const { control, register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<ExpenseFormValues>({
+  const { control, register, handleSubmit, setValue, watch, getValues, formState: { errors, isSubmitting } } = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseSchema),
     defaultValues: { entries: [defaultEntry] },
   })
 
   const { fields, append: appendField, remove } = useFieldArray({ control, name: 'entries' })
 
-  // Scanner điền dòng đầu tiên
-  const handleScanResult = useCallback((result: ScanResult) => {
-    if (result.amount !== null) setValue('entries.0.amount',   String(result.amount))
-    if (result.date)            setValue('entries.0.date',     result.date)
-    if (result.category)        setValue('entries.0.category', result.category)
-    if (result.title)           setValue('entries.0.title',    result.title)
-    if (result.note)            setValue('entries.0.note',     result.note)
-  }, [setValue])
+  // Mỗi ScanResult → 1 entry. Nếu entry đầu rỗng thì điền vào đó, còn lại append.
+  const handleMultiScanResult = useCallback((results: ScanResult[]) => {
+    if (results.length === 0) return
+    const first = getValues('entries.0')
+    const firstEmpty = !first?.amount && !first?.title
+
+    if (firstEmpty && results[0]) {
+      const r = results[0]
+      setValue('entries.0.amount',   r.amount !== null ? String(r.amount) : '')
+      setValue('entries.0.date',     r.date ?? today())
+      setValue('entries.0.category', r.category)
+      setValue('entries.0.title',    r.title)
+      setValue('entries.0.note',     r.note)
+    }
+
+    const rest = firstEmpty ? results.slice(1) : results
+    if (rest.length > 0) {
+      appendField(
+        rest.map(r => ({
+          amount:   r.amount !== null ? String(r.amount) : '',
+          category: r.category,
+          title:    r.title,
+          date:     r.date ?? today(),
+          note:     r.note,
+        })),
+        { shouldFocus: false },
+      )
+    }
+  }, [getValues, setValue, appendField])
 
   const onSubmit = (values: ExpenseFormValues) => {
     const userId = user?.uid ?? ''
@@ -116,8 +137,8 @@ function ExpenseEntries({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {/* AI Scanner — điền dòng đầu */}
-      <ReceiptScanner onResult={handleScanResult} disabled={isSubmitting} />
+      {/* AI Scanner — mỗi ảnh → 1 khoản riêng */}
+      <ReceiptScanner multiple onMultiResult={handleMultiScanResult} disabled={isSubmitting} />
 
       <div className="space-y-3">
         {fields.map((field, i) => {
@@ -167,7 +188,7 @@ function ExpenseEntries({
       </div>
 
       <button type="button"
-        onClick={() => appendField({ ...defaultEntry, date: today() })}
+        onClick={() => appendField({ ...defaultEntry, date: today() }, { shouldFocus: false })}
         className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
         <Plus className="w-4 h-4" />
         Thêm khoản
@@ -261,7 +282,7 @@ function IncomeEntries({
       </div>
 
       <button type="button"
-        onClick={() => appendField({ ...defaultEntry, date: today() })}
+        onClick={() => appendField({ ...defaultEntry, date: today() }, { shouldFocus: false })}
         className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors">
         <Plus className="w-4 h-4" />
         Thêm khoản
