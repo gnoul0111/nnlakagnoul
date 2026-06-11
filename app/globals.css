@@ -160,12 +160,17 @@
 
 /* ─── Dark mode gradient surfaces ───────────────────────────────────────────── */
 
+/* Light mode card gradient */
+.bg-card {
+  background: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(355 8% 97%) 100%);
+}
+
 html.dark {
   background: hsl(var(--background));
 }
 
 html.dark .bg-card {
-  background: linear-gradient(145deg, hsl(0 0% 15%) 0%, hsl(0 0% 10%) 100%);
+  background: linear-gradient(145deg, hsl(0 0% 15%) 0%, hsl(355 5% 10%) 100%);
 }
 
 html.dark .bg-background {
@@ -176,16 +181,16 @@ html.dark .bg-background {
 
 @layer utilities {
   .bg-brand-gradient {
-    background: linear-gradient(135deg, hsl(358 90% 44%) 0%, hsl(338 85% 62%) 100%);
+    background: linear-gradient(90deg, hsl(0 90% 48%) 0%, hsl(335 88% 60%) 100%);
   }
   .text-brand-gradient {
-    background: linear-gradient(135deg, hsl(358 90% 60%) 0%, hsl(338 85% 72%) 100%);
+    background: linear-gradient(90deg, hsl(0 90% 55%) 0%, hsl(335 88% 65%) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
   .border-brand {
-    border-color: hsl(263 70% 62% / 0.4);
+    border-color: hsl(355 78% 55% / 0.4);
   }
 }
 

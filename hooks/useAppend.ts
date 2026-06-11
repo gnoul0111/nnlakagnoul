@@ -3,8 +3,9 @@
 import { useCallback, useState } from 'react'
 import { useAuthStore }   from '@/lib/store/authStore'
 import { useEventStore }  from '@/lib/store/eventStore'
-import { appendEvent }    from '@/lib/services/eventService'
-import { enqueueEvent }   from '@/lib/offline/offlineQueue'
+import { useToastStore }  from '@/lib/store/toastStore'
+import { appendEvent, appendEventsBatch } from '@/lib/services/eventService'
+import { enqueueEvent, flushQueue } from '@/lib/offline/offlineQueue'
 import { useOnlineStatus } from './useOnlineStatus'
 import type { EventDocInput } from '@/lib/types/events'
 import { Timestamp } from 'firebase/firestore'
@@ -126,7 +127,10 @@ export function useAppend() {
       setIsPending(true)
       try {
         await appendEvent(input)
-        await syncEvents(user.uid)
+        // Fire-and-forget: realtime listener already prunes the optimistic event
+        // when the confirmed write comes back via onSnapshot. Awaiting syncEvents
+        // here adds a full extra Firestore read RTT before the form closes.
+        syncEvents(user.uid)
         return 'appended'
       } catch (err) {
         removeLocalEvent(optimisticId)
@@ -138,5 +142,118 @@ export function useAppend() {
     [user, isOnline, appendLocalEvent, removeLocalEvent, syncEvents],
   )
 
-  return { append, appendOptimistic, isPending }
+  /**
+   * appendBackground — optimistic-close write path cho FORM THÊM (thu/chi).
+   *
+   * Khác `append`: KHÔNG await, KHÔNG throw → caller đóng modal NGAY lập tức.
+   * UI cảm giác tức thì vì appendLocalEvent() đã apply optimistic trước mọi network.
+   *
+   * Xử lý ghi lỗi (trả lời câu hỏi "lỡ scan ra rồi mà ghi fail thì sao"):
+   *   - KHÔNG rollback. Item ở lại list, event được enqueue vào offline queue
+   *     để tự thử lại → dữ liệu (kể cả field đã scan từ hóa đơn) KHÔNG mất,
+   *     không phải quét lại.
+   *   - An toàn double-write: replay dedup theo data.id (EXPENSE_ADDED/INCOME_ADDED
+   *     chỉ push nếu id chưa tồn tại) → nếu doc lỡ ghi 2 lần cũng không tạo bản trùng.
+   *   - flushQueue() được kích sau 3s để thử lại ngay, không cần chờ chu kỳ
+   *     offline→online (listener 'online' chỉ fire khi thực sự mất rồi có mạng lại).
+   *
+   * Dùng riêng cho add-modals; `append` cũ giữ nguyên cho edit/delete/goals/debts
+   * (những luồng cần báo lỗi rõ ràng + rollback).
+   */
+  const appendBackground = useCallback(
+    (
+      eventType: EventDocInput['eventType'],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: Record<string, any>,
+    ): void => {
+      if (!user) return
+
+      const clientTimestamp = new Date().toISOString()
+      const input: EventDocInput = {
+        userId: user.uid,
+        eventType,
+        data,
+        clientTimestamp,
+        createdAt: clientTimestamp,
+      }
+
+      const optimisticId = `optimistic_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      appendLocalEvent({ id: optimisticId, ...input, timestamp: Timestamp.now() })
+
+      if (!isOnline) {
+        enqueueEvent(input)
+        return
+      }
+
+      // Online: ghi nền. Caller đã đóng modal — không block UI.
+      appendEvent(input)
+        .then(() => { syncEvents(user.uid) })
+        .catch(err => {
+          // Ghi fail → KHÔNG rollback. Giữ optimistic item + enqueue để retry.
+          console.error('[useAppend] background write failed, queuing for retry:', err)
+          enqueueEvent(input)
+          setTimeout(() => { flushQueue().catch(() => {}) }, 3000)
+          useToastStore.getState().add({
+            type: 'warning',
+            message: 'Mạng chậm — đang lưu lại, sẽ tự đồng bộ.',
+          })
+        })
+    },
+    [user, isOnline, appendLocalEvent, syncEvents],
+  )
+
+  /**
+   * appendBackgroundBatch — ghi nhiều khoản cùng lúc, đóng form NGAY (không await).
+   *
+   * Dùng cho form "thêm nhiều khoản": mỗi entry là 1 event độc lập với id riêng.
+   * Ghi online: appendEventsBatch (song song) + syncEvents ngầm.
+   * Ghi lỗi / offline: enqueue từng event vào offline queue → tự retry.
+   * An toàn double-write: replay dedup theo data.id (EXPENSE_ADDED/INCOME_ADDED).
+   */
+  const appendBackgroundBatch = useCallback(
+    (
+      entries: { eventType: EventDocInput['eventType']; data: Record<string, unknown> }[],
+    ): void => {
+      if (!user || entries.length === 0) return
+
+      const now = Date.now()
+      const inputs: EventDocInput[] = entries.map((e, i) => {
+        // 1ms offset per entry → strictly-increasing clientTimestamp trong cùng batch
+        const clientTimestamp = new Date(now + i).toISOString()
+        return {
+          userId:         user.uid,
+          eventType:      e.eventType,
+          data:           e.data,
+          clientTimestamp,
+          createdAt:      clientTimestamp,
+        }
+      })
+
+      // Optimistic update từng khoản ngay lập tức
+      inputs.forEach(input => {
+        const optimisticId = `optimistic_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        appendLocalEvent({ id: optimisticId, ...input, timestamp: Timestamp.now() })
+      })
+
+      if (!isOnline) {
+        inputs.forEach(input => enqueueEvent(input))
+        return
+      }
+
+      appendEventsBatch(inputs)
+        .then(() => { syncEvents(user.uid) })
+        .catch(err => {
+          console.error('[useAppend] batch write failed, queuing for retry:', err)
+          inputs.forEach(input => enqueueEvent(input))
+          setTimeout(() => { flushQueue().catch(() => {}) }, 3000)
+          useToastStore.getState().add({
+            type:    'warning',
+            message: 'Mạng chậm — đang lưu lại, sẽ tự đồng bộ.',
+          })
+        })
+    },
+    [user, isOnline, appendLocalEvent, syncEvents],
+  )
+
+  return { append, appendBackground, appendBackgroundBatch, appendOptimistic, isPending }
 }
