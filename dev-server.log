@@ -1,0 +1,37 @@
+
+> chitieu-app@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.15
+   - Local:        http://localhost:3000
+   - Network:      http://100.65.115.58:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ○ (serwist) Serwist is disabled.
+ ○ (serwist) Serwist is disabled.
+ ✓ Ready in 3.7s
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 974ms (157 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 9.4s (999 modules)
+ ✓ Compiled in 1635ms (360 modules)
+ GET /login?redirect=%2F 200 in 98ms
+ ✓ Compiled in 324ms (346 modules)
+ ✓ Compiled in 347ms (360 modules)
+ ✓ Compiled in 227ms (360 modules)
+ ✓ Compiled in 355ms (360 modules)
+ ✓ Compiled in 202ms (360 modules)
+ ✓ Compiled in 259ms (360 modules)
+ ✓ Compiled in 175ms (360 modules)
+ ✓ Compiled in 371ms (360 modules)
+ ✓ Compiled in 170ms (360 modules)
+ ✓ Compiled in 223ms (360 modules)
+ ✓ Compiled in 175ms (360 modules)
+ ✓ Compiled in 624ms (360 modules)
+ ✓ Compiled in 333ms (360 modules)
+ ✓ Compiled in 632ms (360 modules)
+ ✓ Compiled in 242ms (360 modules)
+ ✓ Compiled in 366ms (346 modules)
+ ✓ Compiled in 501ms (360 modules)
+ ✓ Compiled in 416ms (360 modules)

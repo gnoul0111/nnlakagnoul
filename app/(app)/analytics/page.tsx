@@ -11,7 +11,7 @@ import { CompareCard }       from '@/components/analytics/compare-card'
 import { CashflowCard }      from '@/components/analytics/cashflow-card'
 import { TrendChart }        from '@/components/analytics/trend-chart'
 import { CategorySummary }   from '@/components/analytics/category-summary'
-import { Spinner }           from '@/components/ui/spinner'
+import { AnalyticsSkeleton } from '@/components/analytics/analytics-skeleton'
 import { AiSummaryWidget }   from '@/components/ai/AiSummaryWidget'
 
 import {
@@ -56,9 +56,7 @@ export default function AnalyticsPage() {
     return calcCashflow(expenses, incomes, debts, goals, savingsPlan, monthKey)
   }, [expenses, incomes, debts, goals, savingsPlans, monthKey, range.type])
 
-  if (isLoading) {
-    return <div className="flex justify-center pt-16"><Spinner size="lg" /></div>
-  }
+  if (isLoading) return <AnalyticsSkeleton />
 
   return (
     <div className="space-y-4 animate-fade-in min-w-0 overflow-x-hidden">
