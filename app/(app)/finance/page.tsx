@@ -10,7 +10,7 @@ import { GoalsTab }     from '@/components/finance/goals/goals-tab'
 import { TemplatesTab } from '@/components/finance/templates/templates-tab'
 import { SavingsTab }   from '@/components/finance/savings/savings-tab'
 import { DebtsTab }     from '@/components/finance/debts/debts-tab'
-import { Spinner } from '@/components/ui/spinner'
+import { FinanceSkeleton } from '@/components/finance/finance-skeleton'
 
 function FinanceContent() {
   const searchParams = useSearchParams()
@@ -34,7 +34,7 @@ function FinanceContent() {
 
 export default function FinancePage() {
   return (
-    <Suspense fallback={<div className="flex justify-center pt-12"><Spinner /></div>}>
+    <Suspense fallback={<FinanceSkeleton />}>
       <FinanceContent />
     </Suspense>
   )

@@ -30,6 +30,8 @@ export function BottomNav() {
             <button
               key={item.href}
               onClick={() => handleNavClick(item.href)}
+              onMouseEnter={() => router.prefetch(item.href)}
+              onFocus={() => router.prefetch(item.href)}
               className={cn(
                 'flex-1 flex flex-col items-center justify-end pb-1 gap-1 text-[11px] font-medium',
                 'transition-colors active:scale-95 min-h-[44px]',

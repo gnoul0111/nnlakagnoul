@@ -50,7 +50,22 @@
       "Bash(Select-Object -First 20)",
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\" -Recurse -Directory | Select-Object -First 30 | ForEach-Object { $_.FullName })",
       "Skill(update-config)",
-      "Skill(update-config:*)"
+      "Skill(update-config:*)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\" -Recurse -Depth 2)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "PowerShell(head -50)",
+      "PowerShell(ls \"c:\\\\Users\\\\DEV01\\\\Downloads\\\\expense-app\" -Recurse -Depth 3 | Where-Object { $_.PSIsContainer -eq $false -and $_.Extension -match '\\\\.\\(tsx|ts|jsx|js\\)$' } | Select-Object -First 30 | ForEach-Object { $_.FullName })",
+      "Bash(Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue)",
+      "Bash(npx playwright *)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(node -e \"const p = require\\('./node_modules/playwright'\\); console.log\\(typeof p.chromium\\)\")",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000\")",
+      "Bash(findstr LISTENING)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)"
     ]
   }
 }

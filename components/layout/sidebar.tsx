@@ -62,6 +62,8 @@ export function Sidebar() {
             <button
               key={item.href}
               onClick={() => { if (!isActive) { setPending(item.href); router.push(item.href) } }}
+              onMouseEnter={() => router.prefetch(item.href)}
+              onFocus={() => router.prefetch(item.href)}
               className={cn(
                 'flex items-center gap-3 px-2.5 py-2.5 rounded-lg text-sm font-medium transition-colors w-full',
                 'hover:bg-accent hover:text-accent-foreground active:scale-[0.97]',
