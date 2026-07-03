@@ -155,6 +155,29 @@ describe('budgetCalc — kỳ lương xuyên 2 tháng dương lịch', () => {
     expect(sumIncome(incomes, range)).toBe(10000)
   })
 
+  // ─── Regression cho bug thật đã gặp (bản deploy đầu tiên) ──────────────────
+  // Root cause: component (Dashboard/Finance tabs) lỡ truyền THẲNG cycleKey
+  // (chuỗi "YYYY-MM-DD", vd "2026-06-25") vào các hàm nhận PeriodLike, thay vì
+  // truyền `range` ({start,end}) đã resolve từ usePeriod(). toRange() nội bộ
+  // không phân biệt được cycleKey với monthKey ("YYYY-MM") — coi cycleKey như
+  // monthKey, nối thêm "-01"/gọi endOfMonth() → ra range rác dạng
+  // "2026-06-25-01".."2026-06-25-30", khiến MỌI chi tiêu/thu nhập bị lọc rớt
+  // (Dashboard hiện toàn 0đ dù dữ liệu thật vẫn còn nguyên trong Firestore).
+  // Test này khẳng định: (1) hành vi sai nếu lỡ truyền bare cycleKey — để nhắc
+  // nhở KHÔNG được làm vậy; (2) truyền đúng `range` object thì luôn ra kết quả
+  // đúng, không phụ thuộc caller quên hay nhớ.
+  test('CẢNH BÁO: truyền bare cycleKey string (thay vì range object) ra kết quả SAI — không được làm vậy ở component', () => {
+    const cycleKeyAsBareString = '2026-06-25' // đây là điều KHÔNG được làm
+    const wrongResult = getConsumptionExpenses(expenses, cycleKeyAsBareString)
+    // Range rác khiến hầu như không khớp gì — đây chính là bug đã gặp
+    expect(wrongResult.length).not.toBe(3)
+  })
+
+  test('Truyền đúng range object luôn ra kết quả đúng, bất kể caller là Dashboard/Finance/Analytics/AI summary', () => {
+    const result = getConsumptionExpenses(expenses, range)
+    expect(result).toHaveLength(3)
+  })
+
   test('calcCashflow với range object — tổng đúng theo kỳ lương', () => {
     const flow = calcCashflow(expenses, incomes, [], [], null, range)
     expect(flow.totalIncome).toBe(10000)

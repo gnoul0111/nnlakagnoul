@@ -148,8 +148,8 @@ export function IncomeTab() {
   const { append }  = useAppend()
   const toast       = useToast()
 
-  const { periodKey: currentMonth, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth } = usePeriod()
-  const { monthIncomes } = useMonthData(currentMonth)
+  const { periodKey: currentMonth, range, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth } = usePeriod()
+  const { monthIncomes } = useMonthData(currentMonth, range)
 
   const [formOpen, setFormOpen]         = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Income | null>(null)

@@ -34,9 +34,9 @@ export function BudgetTab() {
   const moneyHidden = useSettingsStore(selectMoneyHidden)
   const toast       = useToast()
 
-  const { periodKey: currentMonth, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth, isCycleMode } = usePeriod()
+  const { periodKey: currentMonth, range, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth, isCycleMode } = usePeriod()
   const { budget, isLoading, refetch } = useBudget(currentMonth)
-  const { spendingExpenses } = useMonthData(currentMonth)
+  const { spendingExpenses } = useMonthData(currentMonth, range)
 
   const [editing, setEditing]       = useState(false)
   const [saving, setSaving]         = useState(false)

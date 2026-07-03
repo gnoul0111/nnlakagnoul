@@ -50,30 +50,40 @@ export function useAppData() {
 }
 
 /**
- * Hook lấy data theo tháng — dùng ở Dashboard, Finance.
+ * Hook lấy data theo tháng/kỳ lương — dùng ở Dashboard, Finance.
+ *
+ * QUAN TRỌNG: `monthKey` chỉ dùng để tra `savingsPlans` (key opaque, có thể là
+ * monthKey "YYYY-MM" hoặc cycleKey "YYYY-MM-DD" — xem hooks/usePeriod.ts).
+ * Lọc expense/income theo ngày PHẢI dùng `range` thực (nếu có) — KHÔNG được tự
+ * suy ra range từ monthKey, vì cycleKey không phải định dạng "YYYY-MM" (bẫy đã
+ * gặp: truyền cycleKey thẳng vào toRange() ở budgetCalc/replay ra range rác).
+ * Nếu không truyền `range`, mặc định coi `monthKey` là tháng dương lịch (tương
+ * thích ngược cho các call site cũ).
  */
-export function useMonthData(monthKey: string) {
+export function useMonthData(monthKey: string, range?: { start: string; end: string }) {
   const replayedState = useEventStore(s => s.replayedState)
   const isLoading     = useEventStore(s => s.isLoading)
+  const effectiveRange = range ?? monthKey
 
   const data = useMemo(() => {
     const monthExpenses: Expense[] = replayedState
-      ? getExpensesByMonth(replayedState, monthKey)
+      ? getExpensesByMonth(replayedState, effectiveRange)
       : []
 
     const spendingExpenses: Expense[] = replayedState
-      ? getSpendingExpenses(replayedState, monthKey)
+      ? getSpendingExpenses(replayedState, effectiveRange)
       : []
 
     const monthIncomes: Income[] = replayedState
-      ? getIncomesByMonth(replayedState, monthKey)
+      ? getIncomesByMonth(replayedState, effectiveRange)
       : []
 
     const savingsPlan: SavingsPlan | null =
       replayedState?.savingsPlans[monthKey] ?? null
 
     return { monthExpenses, spendingExpenses, monthIncomes, savingsPlan }
-  }, [replayedState, monthKey])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replayedState, monthKey, range?.start, range?.end])
 
   return { ...data, isLoading }
 }

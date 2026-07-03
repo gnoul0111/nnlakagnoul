@@ -22,7 +22,7 @@ import { CalendarDays } from 'lucide-react'
 import { calcCashflow } from '@/lib/utils/budgetCalc'
 import { computeTotalDeposited } from '@/lib/types/savings'
 import { isDebtOverdue, isDebtUpcoming, computePaidAmount, computeRemaining } from '@/lib/types/debt'
-import { today, prevMonth, prevCycle, daysDiff } from '@/lib/utils/date'
+import { today, prevMonth, prevCycle, daysDiff, cycleKeyToRange, startOfMonth, endOfMonth } from '@/lib/utils/date'
 
 /** % thay đổi so với kỳ trước. null nếu kỳ trước = 0 (không so được). */
 function pctChange(cur: number, prev: number): number | null {
@@ -40,23 +40,32 @@ export default function DashboardPage() {
   const { periodKey: currentMonth, range, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth, isCycleMode } = period
 
   // ─── Data ─────────────────────────────────────────────────────────────────
+  // QUAN TRỌNG: truyền `range` (ngày thực) — KHÔNG chỉ `currentMonth` (periodKey).
+  // Ở cycle mode, currentMonth là cycleKey "YYYY-MM-DD", không phải "YYYY-MM" —
+  // nếu chỉ truyền chuỗi, toRange() bên trong sẽ tưởng đó là monthKey và tính
+  // sai hoàn toàn (bẫy đã gặp — xem __tests__/salaryCycle.test.ts).
   const { expenses, goals, debts, allIncomes, savingsPlans, isLoading } = useAppData()
-  const { monthExpenses, spendingExpenses, monthIncomes, savingsPlan } = useMonthData(currentMonth)
+  const { monthExpenses, spendingExpenses, monthIncomes, savingsPlan } = useMonthData(currentMonth, range)
   const { budget }                                  = useBudget(currentMonth)
 
   // ─── Computed ─────────────────────────────────────────────────────────────
   // goals được giữ để calcCashflow tính đúng goalSavedTotal (tiền nạp vào mục tiêu tháng này).
   // UI section Mục tiêu ở dashboard đã ẩn — nhưng cashflow vẫn cần goals để ra số đúng.
   const cashflow = useMemo(
-    () => calcCashflow(expenses, monthIncomes, debts, goals, savingsPlan, currentMonth),
-    [expenses, monthIncomes, debts, goals, savingsPlan, currentMonth],
+    () => calcCashflow(expenses, monthIncomes, debts, goals, savingsPlan, range),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [expenses, monthIncomes, debts, goals, savingsPlan, range.start, range.end],
   )
 
   // Cashflow kỳ trước → tính % so với kỳ trước cho hero
   const prevKey = isCycleMode ? prevCycle(currentMonth, salaryDay) : prevMonth(currentMonth)
+  const prevRange = isCycleMode
+    ? cycleKeyToRange(prevKey, salaryDay)
+    : { start: startOfMonth(prevKey), end: endOfMonth(prevKey) }
   const prevCashflow = useMemo(
-    () => calcCashflow(expenses, allIncomes, debts, goals, savingsPlans[prevKey] ?? null, prevKey),
-    [expenses, allIncomes, debts, goals, savingsPlans, prevKey],
+    () => calcCashflow(expenses, allIncomes, debts, goals, savingsPlans[prevKey] ?? null, prevRange),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [expenses, allIncomes, debts, goals, savingsPlans, prevKey, prevRange.start, prevRange.end],
   )
 
   const savingsDeposited = savingsPlan ? computeTotalDeposited(savingsPlan) : 0
