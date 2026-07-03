@@ -5,16 +5,30 @@ import type { Debt } from '@/lib/types/debt'
 import type { Goal } from '@/lib/types/goal'
 import type { SavingsPlan } from '@/lib/types/savings'
 import { getBudgetAlertLevel, type BudgetAlertLevel } from '@/lib/types/budget'
+import { endOfMonth } from '@/lib/utils/date'
+
+// ─── Period helper ────────────────────────────────────────────────────────────
+// monthKey ("YYYY-MM") cho chế độ tháng dương lịch, hoặc {start,end} cho kỳ lương
+// (xem hooks/usePeriod.ts). Normalize về range thực để so sánh trực tiếp trên
+// Expense.date/Income.date — tránh phải fork riêng 1 bộ hàm cho từng chế độ.
+
+export type PeriodLike = string | { start: string; end: string }
+
+function toRange(period: PeriodLike): { start: string; end: string } {
+  if (typeof period === 'string') return { start: `${period}-01`, end: endOfMonth(period) }
+  return period
+}
 
 // ─── Filter helpers ───────────────────────────────────────────────────────────
 
 /** Spending expenses: loại TẤT CẢ linked expenses — dùng cho budget */
 export function getConsumptionExpenses(
   expenses: Expense[],
-  monthKey: string,
+  monthKey: PeriodLike,
 ): Expense[] {
+  const r = toRange(monthKey)
   return expenses.filter(
-    e => !e.deleted && e.date.startsWith(monthKey) && isConsumptionExpense(e),
+    e => !e.deleted && e.date >= r.start && e.date <= r.end && isConsumptionExpense(e),
   )
 }
 
@@ -23,17 +37,22 @@ export function getConsumptionExpenses(
  *  FIX float guard: VND is integer-only by design, but Math.round protects
  *  against float creep from CSV imports or Firestore parsing edge cases.
  */
-export function sumSpending(expenses: Expense[], monthKey: string): number {
+export function sumSpending(expenses: Expense[], monthKey: PeriodLike): number {
   return Math.round(
     getConsumptionExpenses(expenses, monthKey).reduce((sum, e) => sum + e.amount, 0),
   )
 }
 
-/** Tổng thu nhập trong tháng */
-export function sumIncome(incomes: Income[], monthKey: string): number {
+/** Tổng thu nhập trong tháng
+ *
+ *  Dùng Income.date (ngày thật) thay vì Income.month (cache tháng dương lịch) —
+ *  bắt buộc để kỳ lương (xuyên 2 tháng dương lịch) lọc đúng.
+ */
+export function sumIncome(incomes: Income[], monthKey: PeriodLike): number {
+  const r = toRange(monthKey)
   return Math.round(
     incomes
-      .filter(i => !i.deleted && i.month === monthKey)
+      .filter(i => !i.deleted && i.date >= r.start && i.date <= r.end)
       .reduce((sum, i) => sum + i.amount, 0),
   )
 }
@@ -52,7 +71,7 @@ export interface BudgetSummary {
 export function calcBudgetSummary(
   expenses: Expense[],
   budget: Budget | null,
-  monthKey: string,
+  monthKey: PeriodLike,
 ): BudgetSummary {
   const budgetAmount  = budget ? (budget.spendingAmount ?? budget.amount ?? 0) : 0
   const savingsTarget = budget?.savingsTarget ?? 0
@@ -89,7 +108,7 @@ export interface CategorySpending {
  */
 export function calcCategorySpending(
   expenses: Expense[],
-  monthKey: string,
+  monthKey: PeriodLike,
 ): CategorySpending[] {
   const spending = getConsumptionExpenses(expenses, monthKey)
   const total    = Math.round(spending.reduce((sum, e) => sum + e.amount, 0))
@@ -171,8 +190,9 @@ export function calcCashflow(
   debts: Debt[],
   goals: Goal[],
   savingsPlan: SavingsPlan | null,
-  monthKey: string,
+  monthKey: PeriodLike,
 ): CashflowSummary {
+  const r = toRange(monthKey)
   const totalIncome      = sumIncome(incomes, monthKey)
   const consumptionTotal = sumSpending(expenses, monthKey)
 
@@ -183,7 +203,7 @@ export function calcCashflow(
     debts
       .filter(d => !d.deleted && d.type === 'borrow')
       .flatMap(d => d.payments)
-      .filter(p => p.date.startsWith(monthKey))
+      .filter(p => p.date >= r.start && p.date <= r.end)
       .reduce((sum, p) => sum + p.amount, 0),
   )
 
@@ -192,7 +212,7 @@ export function calcCashflow(
     goals
       .filter(g => !g.deleted)
       .flatMap(g => g.deposits)
-      .filter(d => d.date.startsWith(monthKey))
+      .filter(d => d.date >= r.start && d.date <= r.end)
       .reduce((sum, d) => sum + d.amount, 0),
   )
 
@@ -201,7 +221,7 @@ export function calcCashflow(
   const savingsTotal = Math.round(
     expenses
       .filter(
-        e => !e.deleted && e.date.startsWith(monthKey) && !!e._savingsMonthKey,
+        e => !e.deleted && e.date >= r.start && e.date <= r.end && !!e._savingsMonthKey,
       )
       .reduce((sum, e) => sum + e.amount, 0),
   )
@@ -241,7 +261,7 @@ export interface CategoryAlert {
 export function calcCategoryAlerts(
   expenses: Expense[],
   categoryBudgets: Record<string, number>,
-  monthKey: string,
+  monthKey: PeriodLike,
 ): CategoryAlert[] {
   const spending = calcCategorySpending(expenses, monthKey)
   const alerts: CategoryAlert[] = []

@@ -14,7 +14,7 @@ import { Progress } from '@/components/ui/progress'
 import { MonthPicker } from '@/components/dashboard/month-picker'
 import { CascadeModal } from '@/components/ui/cascade-modal'
 import { useMonthData, useAppData } from '@/hooks/useAppData'
-import { useCurrentMonth } from '@/hooks/useCurrentMonth'
+import { usePeriod } from '@/hooks/usePeriod'
 import { useAuthStore } from '@/lib/store/authStore'
 import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { useAppend } from '@/hooks/useAppend'
@@ -56,7 +56,7 @@ export function SavingsTab() {
   const sync        = useSync()
   const toast       = useToast()
 
-  const { currentMonth, goToPrevMonth, goToNextMonth, goToToday, isCurrentMonth } = useCurrentMonth()
+  const { periodKey: currentMonth, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth, isCycleMode } = usePeriod()
   const { savingsPlan }                  = useMonthData(currentMonth)
   const { expenses, goals: activeGoals } = useAppData()
 
@@ -202,12 +202,19 @@ export function SavingsTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <MonthPicker currentMonth={currentMonth} onPrev={goToPrevMonth} onNext={goToNextMonth} onToday={goToToday} isCurrentMonth={isCurrentMonth} />
+        <MonthPicker label={label} onPrev={goToPrevMonth} onNext={goToNextMonth} onToday={goToToday} isCurrentMonth={isCurrentMonth} />
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setWithdrawOpen(true)} leftIcon={<ArrowDownLeft className="w-3.5 h-3.5" />}>Rút</Button>
           <Button size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setDepositOpen(true)}>Nạp</Button>
         </div>
       </div>
+
+      {/* Kỳ lương là dữ liệu mới — chưa kế thừa tiết kiệm tháng dương lịch cũ */}
+      {isCycleMode && !savingsPlan && (
+        <p className="px-4 py-2.5 rounded-xl bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
+          Tiết kiệm theo kỳ lương là dữ liệu mới, cần thiết lập lại — chưa tự kế thừa từ tháng dương lịch.
+        </p>
+      )}
 
       {/* Overview card */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-4">

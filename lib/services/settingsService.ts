@@ -11,6 +11,7 @@ export function defaultSettings(userId: string): UserSettings {
     theme: 'dark',
     weekStartDay: 'monday',
     salaryDay: 0,
+    cycleModeEnabled: false,
     moneyHidden: false,
     notifEnabled: false,
     groupNotifEnabled: true,

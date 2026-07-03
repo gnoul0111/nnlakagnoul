@@ -2,10 +2,10 @@
 
 import { useMemo } from 'react'
 import { useAuthStore } from '@/lib/store/authStore'
-import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectMoneyHidden, selectSalaryDay } from '@/lib/store/settingsStore'
 import { SECONDARY_METRICS } from '@/lib/dashboard/metricCatalog'
 import { useAppData, useMonthData } from '@/hooks/useAppData'
-import { useCurrentMonth } from '@/hooks/useCurrentMonth'
+import { usePeriod } from '@/hooks/usePeriod'
 import { useBudget } from '@/hooks/useBudget'
 
 import { MonthPicker } from '@/components/dashboard/month-picker'
@@ -22,7 +22,7 @@ import { CalendarDays } from 'lucide-react'
 import { calcCashflow } from '@/lib/utils/budgetCalc'
 import { computeTotalDeposited } from '@/lib/types/savings'
 import { isDebtOverdue, isDebtUpcoming, computePaidAmount, computeRemaining } from '@/lib/types/debt'
-import { today, prevMonth, endOfMonth, daysDiff } from '@/lib/utils/date'
+import { today, prevMonth, prevCycle, daysDiff } from '@/lib/utils/date'
 
 /** % thay đổi so với kỳ trước. null nếu kỳ trước = 0 (không so được). */
 function pctChange(cur: number, prev: number): number | null {
@@ -34,10 +34,10 @@ export default function DashboardPage() {
   const user            = useAuthStore(s => s.user)
   const toggleHidden    = useSettingsStore(s => s.toggleMoneyHidden)
   const moneyHidden     = useSettingsStore(selectMoneyHidden)
+  const salaryDay       = useSettingsStore(selectSalaryDay)
 
-  const {
-    currentMonth, goToPrevMonth, goToNextMonth, goToToday, isCurrentMonth,
-  } = useCurrentMonth()
+  const period = usePeriod()
+  const { periodKey: currentMonth, range, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth, isCycleMode } = period
 
   // ─── Data ─────────────────────────────────────────────────────────────────
   const { expenses, goals, debts, allIncomes, savingsPlans, isLoading } = useAppData()
@@ -52,8 +52,8 @@ export default function DashboardPage() {
     [expenses, monthIncomes, debts, goals, savingsPlan, currentMonth],
   )
 
-  // Cashflow tháng trước → tính % so với tháng trước cho hero
-  const prevKey = prevMonth(currentMonth)
+  // Cashflow kỳ trước → tính % so với kỳ trước cho hero
+  const prevKey = isCycleMode ? prevCycle(currentMonth, salaryDay) : prevMonth(currentMonth)
   const prevCashflow = useMemo(
     () => calcCashflow(expenses, allIncomes, debts, goals, savingsPlans[prevKey] ?? null, prevKey),
     [expenses, allIncomes, debts, goals, savingsPlans, prevKey],
@@ -95,7 +95,7 @@ export default function DashboardPage() {
   const todayStr         = today()
 
   const remainingDays = isCurrentMonth
-    ? Math.max(1, daysDiff(todayStr, endOfMonth(currentMonth)) + 1)
+    ? Math.max(1, daysDiff(todayStr, range.end) + 1)
     : 0
   const dailyBudgetAmount = budgetAmount > 0 && remainingDays > 0
     ? Math.round(Math.max(0, budgetAmount - spendingTotal) / remainingDays)
@@ -132,7 +132,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-foreground">Tổng quan</h2>
         <MonthPicker
-          currentMonth={currentMonth}
+          label={period.label}
           onPrev={goToPrevMonth}
           onNext={goToNextMonth}
           onToday={goToToday}
@@ -164,7 +164,7 @@ export default function DashboardPage() {
       )}
 
       {/* AI summary */}
-      <AiSummaryWidget monthKey={currentMonth} />
+      <AiSummaryWidget periodKey={currentMonth} range={range} label={period.label} />
 
       {/* Recent expenses */}
       <RecentExpenses expenses={monthExpenses} moneyHidden={moneyHidden} />

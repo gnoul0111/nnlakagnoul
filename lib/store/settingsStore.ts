@@ -205,3 +205,5 @@ export const selectTheme            = (s: SettingsStoreState) => s.settings?.the
 export const selectProfilePhoto     = (s: SettingsStoreState) => s.profilePhoto
 export const selectHiddenCategories = (s: SettingsStoreState) =>
   s.categoryPrefs?.hiddenCategories ?? EMPTY_CATEGORIES
+export const selectCycleModeEnabled = (s: SettingsStoreState) => s.settings?.cycleModeEnabled ?? false
+export const selectSalaryDay        = (s: SettingsStoreState) => s.settings?.salaryDay ?? 0

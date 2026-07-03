@@ -204,6 +204,80 @@ export function endOfYear(year: number): string {
   return `${year}-12-31`
 }
 
+// ─── Salary-cycle range (kỳ lương) ─────────────────────────────────────────────
+
+export interface CycleRange {
+  start: string      // YYYY-MM-DD — ngày salaryDay của tháng bắt đầu kỳ
+  end: string         // YYYY-MM-DD — (salaryDay - 1) của tháng sau
+  cycleKey: string    // = start (YYYY-MM-DD) — khác định dạng monthKey (YYYY-MM) nên không bao giờ trùng
+}
+
+/** Số ngày thật trong 1 tháng (0-based month) */
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate()
+}
+
+/** Clamp ngày lương vào tháng ngắn (vd salaryDay=31, tháng 2 → lùi về 28) */
+function clampDayToMonth(year: number, month: number, day: number): number {
+  return Math.min(Math.max(day, 1), daysInMonth(year, month))
+}
+
+/** Cộng/trừ N ngày vào 1 date string */
+function shiftDate(dateStr: string, days: number): string {
+  const d = parseLocalDate(dateStr)
+  d.setDate(d.getDate() + days)
+  return toLocalDateString(d)
+}
+
+/**
+ * Trả về khoảng kỳ lương chứa anchorDate, bắt đầu từ ngày salaryDay mỗi tháng.
+ * salaryDay=0 hoặc không hợp lệ: caller phải tự guard (UI không cho bật cycle mode
+ * khi salaryDay chưa set — xem preferences-tab.tsx).
+ */
+export function getSalaryCycleRange(anchorDate: string, salaryDay: number): CycleRange {
+  const d = parseLocalDate(anchorDate)
+  const day = d.getDate()
+  const anchorYear  = d.getFullYear()
+  const anchorMonth = d.getMonth() // 0-based
+
+  const startsInCurrentMonth = day >= salaryDay
+  const startYear  = startsInCurrentMonth ? anchorYear : (anchorMonth === 0 ? anchorYear - 1 : anchorYear)
+  const startMonth = startsInCurrentMonth ? anchorMonth : (anchorMonth === 0 ? 11 : anchorMonth - 1)
+
+  const clampedStartDay = clampDayToMonth(startYear, startMonth, salaryDay)
+  const start = new Date(startYear, startMonth, clampedStartDay)
+
+  const nextMonthDate = new Date(startYear, startMonth + 1, 1)
+  const endDay = clampDayToMonth(nextMonthDate.getFullYear(), nextMonthDate.getMonth(), salaryDay) - 1
+  const end = new Date(nextMonthDate.getFullYear(), nextMonthDate.getMonth(), Math.max(endDay, 1))
+
+  const startStr = toLocalDateString(start)
+  return { start: startStr, end: toLocalDateString(end), cycleKey: startStr }
+}
+
+/** cycleKey của kỳ lương liền trước */
+export function prevCycle(cycleKey: string, salaryDay: number): string {
+  return getSalaryCycleRange(shiftDate(cycleKey, -1), salaryDay).cycleKey
+}
+
+/** cycleKey của kỳ lương liền sau */
+export function nextCycle(cycleKey: string, salaryDay: number): string {
+  const range = getSalaryCycleRange(cycleKey, salaryDay)
+  return getSalaryCycleRange(shiftDate(range.end, 1), salaryDay).cycleKey
+}
+
+/** Dựng lại range đầy đủ từ 1 cycleKey đã lưu (cycleKey chính là start) */
+export function cycleKeyToRange(cycleKey: string, salaryDay: number): CycleRange {
+  return getSalaryCycleRange(cycleKey, salaryDay)
+}
+
+/** "Kỳ lương 25/06 - 24/07" */
+export function formatCycleLabel(start: string, end: string): string {
+  const [, sm, sd] = start.split('-')
+  const [, em, ed] = end.split('-')
+  return `Kỳ lương ${sd}/${sm} - ${ed}/${em}`
+}
+
 // ─── Calendar grid (cho DatePicker / DateRangePicker) ─────────────────────────
 
 export interface CalendarCell {

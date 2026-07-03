@@ -4,15 +4,18 @@ import { useAiSummary } from '@/hooks/useAiSummary'
 import { cn } from '@/lib/utils/cn'
 
 interface AiSummaryWidgetProps {
-  monthKey:  string
+  /** monthKey ("YYYY-MM") hoặc cycleKey ("YYYY-MM-DD") — xem hooks/usePeriod.ts */
+  periodKey: string
+  range: { start: string; end: string }
+  label: string
   className?: string
 }
 
-export function AiSummaryWidget({ monthKey, className }: AiSummaryWidgetProps) {
+export function AiSummaryWidget({ periodKey, range, label, className }: AiSummaryWidgetProps) {
   const {
     summaryStatus, summary, summaryError, generateSummary,
     ttsStatus, hasTts, speak, pauseSpeech, resumeSpeech, stopSpeech,
-  } = useAiSummary(monthKey)
+  } = useAiSummary(periodKey, range, label)
 
   const isLoading  = summaryStatus === 'loading'
   const hasSummary = summaryStatus === 'done' && !!summary

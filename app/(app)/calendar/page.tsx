@@ -23,8 +23,10 @@ import {
   today, toLocalDateString, parseLocalDate,
   getWeekRange, prevMonth, nextMonth,
   formatMonthLabel, formatDateLong,
+  getSalaryCycleRange, formatCycleLabel,
 } from '@/lib/utils/date'
 import { deleteCalendarEvent } from '@/lib/services/calendarService'
+import { useSettingsStore, selectCycleModeEnabled, selectSalaryDay } from '@/lib/store/settingsStore'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
@@ -90,6 +92,8 @@ function getPeriodRange(anchor: string, view: CalendarView): { start: string; en
 export default function CalendarPage() {
   const toast = useToast()
   const { events, loading, refresh } = useCalendarEvents()
+  const cycleModeEnabled = useSettingsStore(selectCycleModeEnabled)
+  const salaryDay        = useSettingsStore(selectSalaryDay)
 
   const [mode,   setMode]   = useState<CalendarMode>('finance')
   const [view,   setView]   = useState<CalendarView>('month')
@@ -107,6 +111,14 @@ export default function CalendarPage() {
   const periodLabel    = getPeriodLabel(anchor, view)
   const isAtToday      = isAtTodayCheck(anchor, view)
   const { start, end } = useMemo(() => getPeriodRange(anchor, view), [anchor, view])
+
+  // Khối tổng hợp kỳ lương hiện tại — LUÔN neo vào "hôm nay" (không theo anchor
+  // đang duyệt), vì kỳ lương xuyên 2 tháng dương lịch, không map vào lưới ngày
+  // được. Lưới ngày (MonthView/WeekView/YearView) giữ nguyên theo tháng dương lịch.
+  const cycleRange = useMemo(
+    () => cycleModeEnabled ? getSalaryCycleRange(today(), salaryDay) : null,
+    [cycleModeEnabled, salaryDay],
+  )
 
   const handleNavigate = useCallback((dir: -1 | 1) => {
     setAnchor(a => shiftAnchor(a, view, dir))
@@ -187,6 +199,15 @@ export default function CalendarPage() {
       />
 
       {mode === 'finance' && <FinanceSummaryBar start={start} end={end} />}
+
+      {mode === 'finance' && cycleRange && (
+        <div className="border-b border-border">
+          <p className="px-4 pt-2 text-[11px] text-muted-foreground">
+            {formatCycleLabel(cycleRange.start, cycleRange.end)} (kỳ lương hiện tại)
+          </p>
+          <FinanceSummaryBar start={cycleRange.start} end={cycleRange.end} />
+        </div>
+      )}
 
       {/* ── Main content: single scroll container ────────────────────────────
           Toàn bộ calendar + detail panel nằm trong 1 overflow-y-auto duy nhất.

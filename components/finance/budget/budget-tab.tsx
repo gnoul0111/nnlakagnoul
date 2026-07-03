@@ -11,7 +11,7 @@ import { AmountInput } from '@/components/ui/amount-input'
 import { Progress } from '@/components/ui/progress'
 import { MonthPicker } from '@/components/dashboard/month-picker'
 import { useBudget } from '@/hooks/useBudget'
-import { useCurrentMonth } from '@/hooks/useCurrentMonth'
+import { usePeriod } from '@/hooks/usePeriod'
 import { useMonthData } from '@/hooks/useAppData'
 import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { useAuthStore } from '@/lib/store/authStore'
@@ -34,7 +34,7 @@ export function BudgetTab() {
   const moneyHidden = useSettingsStore(selectMoneyHidden)
   const toast       = useToast()
 
-  const { currentMonth, goToPrevMonth, goToNextMonth, goToToday, isCurrentMonth } = useCurrentMonth()
+  const { periodKey: currentMonth, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth, isCycleMode } = usePeriod()
   const { budget, isLoading, refetch } = useBudget(currentMonth)
   const { spendingExpenses } = useMonthData(currentMonth)
 
@@ -110,11 +110,18 @@ export function BudgetTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <MonthPicker currentMonth={currentMonth} onPrev={goToPrevMonth} onNext={goToNextMonth} onToday={goToToday} isCurrentMonth={isCurrentMonth} />
+        <MonthPicker label={label} onPrev={goToPrevMonth} onNext={goToNextMonth} onToday={goToToday} isCurrentMonth={isCurrentMonth} />
         <Button size="sm" variant="outline" leftIcon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEditing(true)}>
           Chỉnh sửa
         </Button>
       </div>
+
+      {/* Kỳ lương là dữ liệu mới — chưa kế thừa ngân sách tháng dương lịch cũ */}
+      {isCycleMode && budgetAmount === 0 && (
+        <p className="px-4 py-2.5 rounded-xl bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
+          Ngân sách theo kỳ lương là dữ liệu mới, cần thiết lập lại — chưa tự kế thừa từ tháng dương lịch.
+        </p>
+      )}
 
       {/* Budget overview card */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-4">

@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { X, AlertTriangle } from 'lucide-react'
 import { useAppData }           from '@/hooks/useAppData'
 import { useBudget }            from '@/hooks/useBudget'
-import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
+import {
+  useSettingsStore, selectMoneyHidden, selectCycleModeEnabled, selectSalaryDay,
+} from '@/lib/store/settingsStore'
 import { formatVND }            from '@/lib/utils/currency'
-import { thisMonth, today }     from '@/lib/utils/date'
+import { thisMonth, today, getSalaryCycleRange, startOfMonth, endOfMonth } from '@/lib/utils/date'
 import { cn }                   from '@/lib/utils/cn'
 import { isConsumptionExpense } from '@/lib/types/expense'
 
@@ -33,10 +35,14 @@ function saveDismissedDate(date: string): void {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function BudgetAlertBanner() {
-  const monthKey    = thisMonth()
+  const cycleModeEnabled = useSettingsStore(selectCycleModeEnabled)
+  const salaryDay         = useSettingsStore(selectSalaryDay)
   const todayStr    = today()
+  const cycle       = cycleModeEnabled ? getSalaryCycleRange(todayStr, salaryDay) : null
+  const periodKey   = cycle ? cycle.cycleKey : thisMonth()
+  const range       = cycle ? { start: cycle.start, end: cycle.end } : { start: startOfMonth(thisMonth()), end: endOfMonth(thisMonth()) }
   const { expenses } = useAppData()
-  const { budget, isLoading } = useBudget(monthKey)
+  const { budget, isLoading } = useBudget(periodKey)
   const moneyHidden = useSettingsStore(selectMoneyHidden)
   // Dismissed state — đọc từ localStorage sau khi mount (tránh hydration mismatch)
   const [dismissed, setDismissed] = useState(true)
@@ -51,12 +57,12 @@ export function BudgetAlertBanner() {
     if (budgetAmount <= 0) return { usedAmount: 0, budgetAmount, usedPct: 0, shouldShow: false }
 
     const usedAmount = expenses
-      .filter(e => e.date.startsWith(monthKey) && isConsumptionExpense(e))
+      .filter(e => e.date >= range.start && e.date <= range.end && isConsumptionExpense(e))
       .reduce((s, e) => s + e.amount, 0)
 
     const usedPct = usedAmount / budgetAmount
     return { usedAmount, budgetAmount, usedPct, shouldShow: usedPct >= ALERT_THRESHOLD }
-  }, [budget, expenses, monthKey])
+  }, [budget, expenses, range.start, range.end])
 
   const handleDismiss = () => {
     saveDismissedDate(todayStr)

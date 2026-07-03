@@ -8,7 +8,7 @@ import { DateRangePicker }  from '@/components/ui/date-picker'
 import { MonthPicker }      from '@/components/dashboard/month-picker'
 import { ExpenseFormModal } from './expense-form-modal'
 import { useMonthData }     from '@/hooks/useAppData'
-import { useCurrentMonth }  from '@/hooks/useCurrentMonth'
+import { usePeriod }        from '@/hooks/usePeriod'
 import { useAppend }        from '@/hooks/useAppend'
 import { useToast }         from '@/hooks/useToast'
 import { useAuthStore }     from '@/lib/store/authStore'
@@ -29,7 +29,7 @@ export function ExpensesTab() {
   const { append }  = useAppend()
   const toast       = useToast()
 
-  const { currentMonth, goToPrevMonth, goToNextMonth, goToToday, isCurrentMonth } = useCurrentMonth()
+  const { periodKey: currentMonth, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth } = usePeriod()
   const { monthExpenses } = useMonthData(currentMonth)
 
   const [formOpen,      setFormOpen]      = useState(false)
@@ -124,7 +124,7 @@ export function ExpensesTab() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <MonthPicker currentMonth={currentMonth} onPrev={goToPrevMonth}
+        <MonthPicker label={label} onPrev={goToPrevMonth}
           onNext={goToNextMonth} onToday={goToToday} isCurrentMonth={isCurrentMonth} />
         <Button size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />}
           onClick={() => { setEditTarget(null); setFormOpen(true) }}>

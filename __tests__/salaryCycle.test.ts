@@ -1,0 +1,163 @@
+import {
+  getSalaryCycleRange, prevCycle, nextCycle, cycleKeyToRange,
+  startOfMonth, endOfMonth,
+} from '../lib/utils/date'
+import {
+  getConsumptionExpenses, sumIncome, calcCashflow, calcBudgetSummary,
+} from '../lib/utils/budgetCalc'
+import type { Expense } from '../lib/types/expense'
+import type { Income } from '../lib/types/income'
+
+// ─── getSalaryCycleRange ────────────────────────────────────────────────────
+
+describe('getSalaryCycleRange', () => {
+  test('anchor sau salaryDay trong tháng → kỳ bắt đầu tháng này', () => {
+    const r = getSalaryCycleRange('2026-07-03', 25)
+    expect(r).toEqual({ start: '2026-06-25', end: '2026-07-24', cycleKey: '2026-06-25' })
+  })
+
+  test('anchor đúng ngày salaryDay → kỳ bắt đầu từ chính ngày đó', () => {
+    const r = getSalaryCycleRange('2026-06-25', 25)
+    expect(r.start).toBe('2026-06-25')
+    expect(r.end).toBe('2026-07-24')
+  })
+
+  test('anchor trước salaryDay trong tháng → kỳ bắt đầu tháng trước', () => {
+    const r = getSalaryCycleRange('2026-07-20', 25)
+    expect(r).toEqual({ start: '2026-06-25', end: '2026-07-24', cycleKey: '2026-06-25' })
+  })
+
+  test('qua năm mới — anchor tháng 1 trước salaryDay → kỳ bắt đầu tháng 12 năm trước', () => {
+    const r = getSalaryCycleRange('2026-01-10', 25)
+    expect(r.start).toBe('2025-12-25')
+    expect(r.end).toBe('2026-01-24')
+  })
+
+  test('salaryDay=31 rơi vào tháng 2 (28 ngày) → lùi về ngày cuối tháng', () => {
+    const r = getSalaryCycleRange('2026-02-15', 31)
+    // Kỳ chứa 15/2 khi salaryDay=31: tháng 1 có 31 ngày → kỳ bắt đầu 31/1
+    expect(r.start).toBe('2026-01-31')
+    // Kỳ kết thúc = ngày cuối tháng 2 (30/2026 không phải năm nhuận → 28 ngày) trừ 1 = 27/2,
+    // nhưng vì tháng 2 chỉ có 28 ngày (clamp), end = 28/2 - 1 ngày... xem lại thực tế bằng clamp:
+    // endMonth = tháng 2, clampDayToMonth(2026,1,31) = 28 → end day = 28-1 = 27
+    expect(r.end).toBe('2026-02-27')
+  })
+
+  test('cycleKey luôn khác định dạng monthKey (10 ký tự vs 7 ký tự) — không đụng độ namespace', () => {
+    const r = getSalaryCycleRange('2026-07-03', 25)
+    expect(r.cycleKey).toHaveLength(10)
+    expect(r.cycleKey).not.toMatch(/^\d{4}-\d{2}$/)
+  })
+})
+
+describe('prevCycle / nextCycle', () => {
+  test('next rồi prev quay lại đúng cycleKey ban đầu', () => {
+    const start = getSalaryCycleRange('2026-07-03', 25).cycleKey
+    const next  = nextCycle(start, 25)
+    const back  = prevCycle(next, 25)
+    expect(back).toBe(start)
+  })
+
+  test('nextCycle nhảy đúng 1 tháng', () => {
+    const start = '2026-06-25'
+    expect(nextCycle(start, 25)).toBe('2026-07-25')
+  })
+
+  test('prevCycle qua năm mới', () => {
+    expect(prevCycle('2026-01-25', 25)).toBe('2025-12-25')
+  })
+})
+
+describe('cycleKeyToRange', () => {
+  test('dựng lại đúng range từ cycleKey đã lưu', () => {
+    const original = getSalaryCycleRange('2026-07-03', 25)
+    const rebuilt  = cycleKeyToRange(original.cycleKey, 25)
+    expect(rebuilt).toEqual(original)
+  })
+})
+
+// ─── budgetCalc regression — hành vi tháng dương lịch phải giữ nguyên ──────
+
+function exp(date: string, amount: number, overrides: Partial<Expense> = {}): Expense {
+  return {
+    id: `e-${date}-${amount}`, userId: 'u1', amount, date,
+    category: 'other', note: '', deleted: false,
+    ...overrides,
+  } as Expense
+}
+
+function inc(date: string, amount: number): Income {
+  return {
+    id: `i-${date}-${amount}`, userId: 'u1', amount, date,
+    month: date.slice(0, 7), source: 'Lương', note: '', deleted: false,
+  } as Income
+}
+
+describe('budgetCalc — regression tháng dương lịch (monthKey string vẫn hoạt động y hệt cũ)', () => {
+  const expenses: Expense[] = [
+    exp('2026-06-30', 100),   // tháng trước — không được tính
+    exp('2026-07-01', 200),
+    exp('2026-07-15', 300),
+    exp('2026-07-31', 400),
+    exp('2026-08-01', 500),   // tháng sau — không được tính
+  ]
+  const incomes: Income[] = [
+    inc('2026-06-30', 1000),
+    inc('2026-07-05', 5000),
+    inc('2026-07-25', 2000),
+    inc('2026-08-01', 9000),
+  ]
+
+  test('getConsumptionExpenses chỉ lấy đúng expense trong tháng 7', () => {
+    const result = getConsumptionExpenses(expenses, '2026-07')
+    expect(result.map(e => e.date)).toEqual(['2026-07-01', '2026-07-15', '2026-07-31'])
+  })
+
+  test('sumIncome dùng monthKey string vẫn ra đúng tổng (dù đã đổi từ i.month sang i.date range)', () => {
+    expect(sumIncome(incomes, '2026-07')).toBe(7000)
+  })
+
+  test('calcBudgetSummary với monthKey string — usedAmount khớp tổng chi tháng 7', () => {
+    const summary = calcBudgetSummary(expenses, { spendingAmount: 1000 } as any, '2026-07')
+    expect(summary.usedAmount).toBe(900)
+  })
+
+  test('calcCashflow với monthKey string — totalIncome/consumptionTotal khớp tháng 7', () => {
+    const flow = calcCashflow(expenses, incomes, [], [], null, '2026-07')
+    expect(flow.totalIncome).toBe(7000)
+    expect(flow.consumptionTotal).toBe(900)
+  })
+})
+
+describe('budgetCalc — kỳ lương xuyên 2 tháng dương lịch', () => {
+  // Kỳ lương 25/06 → 24/07
+  const range = { start: '2026-06-25', end: '2026-07-24' }
+
+  const expenses: Expense[] = [
+    exp('2026-06-24', 50),    // trước kỳ — loại
+    exp('2026-06-25', 100),   // đầu kỳ
+    exp('2026-07-10', 200),   // giữa kỳ (tháng dương lịch khác)
+    exp('2026-07-24', 300),   // cuối kỳ
+    exp('2026-07-25', 400),   // sau kỳ — loại
+  ]
+  const incomes: Income[] = [
+    inc('2026-06-25', 5000),  // đầu kỳ — Income.month="2026-06", vẫn phải được tính
+    inc('2026-07-24', 5000),  // cuối kỳ — Income.month="2026-07"
+    inc('2026-07-25', 9999),  // sau kỳ — loại
+  ]
+
+  test('getConsumptionExpenses với range object lọc đúng theo ngày thực, xuyên 2 tháng', () => {
+    const result = getConsumptionExpenses(expenses, range)
+    expect(result.map(e => e.date)).toEqual(['2026-06-25', '2026-07-10', '2026-07-24'])
+  })
+
+  test('sumIncome với range — PHẢI dùng Income.date, không phải Income.month (2 income khác monthKey nhưng cùng kỳ lương)', () => {
+    expect(sumIncome(incomes, range)).toBe(10000)
+  })
+
+  test('calcCashflow với range object — tổng đúng theo kỳ lương', () => {
+    const flow = calcCashflow(expenses, incomes, [], [], null, range)
+    expect(flow.totalIncome).toBe(10000)
+    expect(flow.consumptionTotal).toBe(600)
+  })
+})
