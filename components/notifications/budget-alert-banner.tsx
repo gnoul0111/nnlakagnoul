@@ -5,7 +5,7 @@ import { X, AlertTriangle } from 'lucide-react'
 import { useAppData }           from '@/hooks/useAppData'
 import { useBudget }            from '@/hooks/useBudget'
 import {
-  useSettingsStore, selectMoneyHidden, selectCycleModeEnabled, selectSalaryDay,
+  useSettingsStore, selectMoneyHidden, selectIsCycleModeActive, selectSalaryDay,
 } from '@/lib/store/settingsStore'
 import { formatVND }            from '@/lib/utils/currency'
 import { thisMonth, today, getSalaryCycleRange, startOfMonth, endOfMonth } from '@/lib/utils/date'
@@ -35,7 +35,7 @@ function saveDismissedDate(date: string): void {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function BudgetAlertBanner() {
-  const cycleModeEnabled = useSettingsStore(selectCycleModeEnabled)
+  const cycleModeEnabled = useSettingsStore(selectIsCycleModeActive)
   const salaryDay         = useSettingsStore(selectSalaryDay)
   const todayStr    = today()
   const cycle       = cycleModeEnabled ? getSalaryCycleRange(todayStr, salaryDay) : null

@@ -5,13 +5,7 @@ import type { Goal, GoalDeposit } from '@/lib/types/goal'
 import type { Debt, DebtPayment } from '@/lib/types/debt'
 import type { Template } from '@/lib/types/template'
 import type { SavingsPlan, SavingsDeposit, SavingsWithdrawal, SavingsAllocation } from '@/lib/types/savings'
-import { endOfMonth } from '@/lib/utils/date'
-import type { PeriodLike } from '@/lib/utils/budgetCalc'
-
-function toRange(period: PeriodLike): { start: string; end: string } {
-  if (typeof period === 'string') return { start: `${period}-01`, end: endOfMonth(period) }
-  return period
-}
+import { toRange, type PeriodLike } from '@/lib/utils/date'
 
 // ─── Replayed State ───────────────────────────────────────────────────────────
 

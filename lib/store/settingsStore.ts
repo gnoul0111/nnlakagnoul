@@ -206,4 +206,13 @@ export const selectProfilePhoto     = (s: SettingsStoreState) => s.profilePhoto
 export const selectHiddenCategories = (s: SettingsStoreState) =>
   s.categoryPrefs?.hiddenCategories ?? EMPTY_CATEGORIES
 export const selectCycleModeEnabled = (s: SettingsStoreState) => s.settings?.cycleModeEnabled ?? false
+/**
+ * Cycle mode CHỈ thực sự active khi salaryDay hợp lệ (> 0) — bẫy đã gặp:
+ * `cycleModeEnabled` có thể còn true từ trước dù user đã sửa salaryDay về 0,
+ * lúc đó getSalaryCycleRange(anchor, 0) ra range chồng lấn 1 ngày giữa 2 kỳ
+ * liên tiếp. Mọi nơi tính toán theo kỳ lương PHẢI dùng selector này, không
+ * dùng thẳng selectCycleModeEnabled.
+ */
+export const selectIsCycleModeActive = (s: SettingsStoreState) =>
+  (s.settings?.cycleModeEnabled ?? false) && (s.settings?.salaryDay ?? 0) > 0
 export const selectSalaryDay        = (s: SettingsStoreState) => s.settings?.salaryDay ?? 0

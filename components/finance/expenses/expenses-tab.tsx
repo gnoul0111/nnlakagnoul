@@ -29,8 +29,8 @@ export function ExpensesTab() {
   const { append }  = useAppend()
   const toast       = useToast()
 
-  const { periodKey: currentMonth, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth } = usePeriod()
-  const { monthExpenses } = useMonthData(currentMonth)
+  const { periodKey: currentMonth, range, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth } = usePeriod()
+  const { monthExpenses } = useMonthData(currentMonth, range)
 
   const [formOpen,      setFormOpen]      = useState(false)
   const [editTarget,    setEditTarget]    = useState<Expense | null>(null)

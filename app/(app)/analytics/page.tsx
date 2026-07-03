@@ -54,12 +54,17 @@ export default function AnalyticsPage() {
     return buildMonthlyData(expenses, incomes, parseInt(range.start.slice(0, 4)))
   }, [dailyData, range.type, expenses, incomes])
 
-  // Cashflow chỉ cho month/cycle view
+  // Cashflow chỉ cho month/cycle view.
+  // QUAN TRỌNG: truyền `range` (ngày thực), KHÔNG truyền `monthKey` (string) —
+  // ở cycle view, monthKey là cycleKey "YYYY-MM-DD", nếu truyền thẳng vào
+  // calcCashflow sẽ bị hiểu nhầm là monthKey "YYYY-MM" và tính sai hoàn toàn
+  // (bẫy đã gặp — xem __tests__/salaryCycle.test.ts).
   const cashflow = useMemo(() => {
     if (!isSinglePeriod) return null
     const savingsPlan = savingsPlans[monthKey] ?? null
-    return calcCashflow(expenses, incomes, debts, goals, savingsPlan, monthKey)
-  }, [expenses, incomes, debts, goals, savingsPlans, monthKey, isSinglePeriod])
+    return calcCashflow(expenses, incomes, debts, goals, savingsPlan, range)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenses, incomes, debts, goals, savingsPlans, monthKey, range.start, range.end, isSinglePeriod])
 
   if (isLoading) return <AnalyticsSkeleton />
 

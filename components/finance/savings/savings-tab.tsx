@@ -56,8 +56,8 @@ export function SavingsTab() {
   const sync        = useSync()
   const toast       = useToast()
 
-  const { periodKey: currentMonth, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth, isCycleMode } = usePeriod()
-  const { savingsPlan }                  = useMonthData(currentMonth)
+  const { periodKey: currentMonth, range, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth, isCycleMode } = usePeriod()
+  const { savingsPlan }                  = useMonthData(currentMonth, range)
   const { expenses, goals: activeGoals } = useAppData()
 
   const [depositOpen, setDepositOpen]   = useState(false)

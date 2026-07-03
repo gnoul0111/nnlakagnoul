@@ -36,7 +36,7 @@ export function useAiSummary(periodKey: string, range: { start: string; end: str
 
   // ─── Data ────────────────────────────────────────────────────────────────────
   const { expenses, allIncomes: incomes, debts, goals } = useAppData()
-  const { monthIncomes, savingsPlan, spendingExpenses }  = useMonthData(periodKey)
+  const { monthIncomes, savingsPlan, spendingExpenses }  = useMonthData(periodKey, range)
   const { budget } = useBudget(periodKey)
 
   const financialData = useMemo((): FinanceSummaryInput => {

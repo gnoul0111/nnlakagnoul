@@ -26,7 +26,7 @@ import {
   getSalaryCycleRange, formatCycleLabel,
 } from '@/lib/utils/date'
 import { deleteCalendarEvent } from '@/lib/services/calendarService'
-import { useSettingsStore, selectCycleModeEnabled, selectSalaryDay } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectIsCycleModeActive, selectSalaryDay } from '@/lib/store/settingsStore'
 import type { WorkCalendarEvent } from '@/lib/types/settings'
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ function getPeriodRange(anchor: string, view: CalendarView): { start: string; en
 export default function CalendarPage() {
   const toast = useToast()
   const { events, loading, refresh } = useCalendarEvents()
-  const cycleModeEnabled = useSettingsStore(selectCycleModeEnabled)
+  const cycleModeEnabled = useSettingsStore(selectIsCycleModeActive)
   const salaryDay        = useSettingsStore(selectSalaryDay)
 
   const [mode,   setMode]   = useState<CalendarMode>('finance')

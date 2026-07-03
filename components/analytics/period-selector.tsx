@@ -8,7 +8,7 @@ import {
   getWeekRange, prevMonth, nextMonth, thisMonth,
   formatMonthLabel, getSalaryCycleRange, prevCycle, nextCycle, formatCycleLabel,
 } from '@/lib/utils/date'
-import { useSettingsStore, selectCycleModeEnabled, selectSalaryDay } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectIsCycleModeActive, selectSalaryDay } from '@/lib/store/settingsStore'
 import type { PeriodType, PeriodRange } from '@/hooks/useAnalyticsData'
 
 interface PeriodSelectorProps {
@@ -61,7 +61,7 @@ function shiftAnchor(anchor: string, type: PeriodType, dir: -1 | 1, salaryDay: n
 
 export function PeriodSelector({ value, onChange }: PeriodSelectorProps) {
   const [anchor, setAnchor] = useState(today())
-  const cycleModeEnabled = useSettingsStore(selectCycleModeEnabled)
+  const cycleModeEnabled = useSettingsStore(selectIsCycleModeActive)
   const salaryDay        = useSettingsStore(selectSalaryDay)
   const tabs = cycleModeEnabled ? [...BASE_TABS, CYCLE_TAB] : BASE_TABS
 
