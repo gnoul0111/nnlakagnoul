@@ -5,6 +5,13 @@ import type { Goal, GoalDeposit } from '@/lib/types/goal'
 import type { Debt, DebtPayment } from '@/lib/types/debt'
 import type { Template } from '@/lib/types/template'
 import type { SavingsPlan, SavingsDeposit, SavingsWithdrawal, SavingsAllocation } from '@/lib/types/savings'
+import { endOfMonth } from '@/lib/utils/date'
+import type { PeriodLike } from '@/lib/utils/budgetCalc'
+
+function toRange(period: PeriodLike): { start: string; end: string } {
+  if (typeof period === 'string') return { start: `${period}-01`, end: endOfMonth(period) }
+  return period
+}
 
 // ─── Replayed State ───────────────────────────────────────────────────────────
 
@@ -602,14 +609,16 @@ export function replayFromSnapshot(
 export function getActiveExpenses(state: ReplayedState): Expense[] {
   return state.expenses.filter(e => !e.deleted)
 }
-export function getExpensesByMonth(state: ReplayedState, monthKey: string): Expense[] {
-  return getActiveExpenses(state).filter(e => e.date?.startsWith(monthKey))
+export function getExpensesByMonth(state: ReplayedState, monthKey: PeriodLike): Expense[] {
+  const r = toRange(monthKey)
+  return getActiveExpenses(state).filter(e => !!e.date && e.date >= r.start && e.date <= r.end)
 }
-export function getSpendingExpenses(state: ReplayedState, monthKey: string): Expense[] {
+export function getSpendingExpenses(state: ReplayedState, monthKey: PeriodLike): Expense[] {
   return getExpensesByMonth(state, monthKey).filter(isConsumptionExpense)
 }
-export function getIncomesByMonth(state: ReplayedState, monthKey: string): Income[] {
-  return state.incomes.filter(i => !i.deleted && i.month === monthKey)
+export function getIncomesByMonth(state: ReplayedState, monthKey: PeriodLike): Income[] {
+  const r = toRange(monthKey)
+  return state.incomes.filter(i => !i.deleted && i.date >= r.start && i.date <= r.end)
 }
 export function getActiveGoals(state: ReplayedState):     Goal[]     { return state.goals.filter(g => !g.deleted) }
 export function getActiveDebts(state: ReplayedState):     Debt[]     { return state.debts.filter(d => !d.deleted) }

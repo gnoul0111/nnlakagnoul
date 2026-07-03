@@ -13,6 +13,7 @@ export interface UserSettings {
   theme: Theme
   weekStartDay: WeekStartDay
   salaryDay: number         // 0 = không set
+  cycleModeEnabled: boolean // Xem thu/chi theo kỳ lương (salaryDay → salaryDay-1 tháng sau) thay vì tháng dương lịch
   moneyHidden: boolean      // Ẩn/hiện số tiền toàn app
   fcmToken?: string | null
   notifEnabled: boolean

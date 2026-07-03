@@ -11,7 +11,7 @@ import type { Income } from '@/lib/types/income'
 
 // ─── Types (nguồn gốc duy nhất — useAnalyticsData.ts re-export lại) ───────────
 
-export type PeriodType = 'week' | 'month' | 'year'
+export type PeriodType = 'week' | 'month' | 'year' | 'cycle'
 
 export interface PeriodRange {
   type: PeriodType

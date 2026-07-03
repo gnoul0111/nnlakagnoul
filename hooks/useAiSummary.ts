@@ -7,16 +7,22 @@ import { useBudget } from './useBudget'
 import { calcCashflow, calcCategorySpending } from '@/lib/utils/budgetCalc'
 import { computeTotalDeposited } from '@/lib/types/savings'
 import { isDebtOverdue, isDebtUpcoming, computeRemaining } from '@/lib/types/debt'
-import { today, thisMonth } from '@/lib/utils/date'
+import { today, daysDiff } from '@/lib/utils/date'
 import type { FinanceSummaryInput } from '@/app/api/ai/finance-summary/route'
 
 export type SummaryStatus = 'idle' | 'loading' | 'done' | 'error'
 export type TtsStatus     = 'idle' | 'loading' | 'speaking' | 'paused'
 
-// In-session cache per monthKey — clears on page refresh, avoids repeated API calls
+// In-session cache per periodKey — clears on page refresh, avoids repeated API calls
 const summaryCache = new Map<string, string>()
 
-export function useAiSummary(monthKey: string) {
+/**
+ * periodKey: monthKey ("YYYY-MM") hoặc cycleKey ("YYYY-MM-DD", xem usePeriod.ts) —
+ * dùng để tra Budget/SavingsPlan (key opaque, không parse).
+ * range/label: luôn tính từ ngày thực — bắt buộc để hoạt động đúng cho cả 2 chế độ
+ * (KHÔNG parse periodKey bằng split('-') vì cycleKey có 3 phần, không phải 2).
+ */
+export function useAiSummary(periodKey: string, range: { start: string; end: string }, label: string) {
   const [summaryStatus, setSummaryStatus] = useState<SummaryStatus>('idle')
   const [summary,       setSummary]       = useState<string | null>(null)
   const [summaryError,  setSummaryError]  = useState<string | null>(null)
@@ -30,19 +36,19 @@ export function useAiSummary(monthKey: string) {
 
   // ─── Data ────────────────────────────────────────────────────────────────────
   const { expenses, allIncomes: incomes, debts, goals } = useAppData()
-  const { monthIncomes, savingsPlan, spendingExpenses }  = useMonthData(monthKey)
-  const { budget } = useBudget(monthKey)
+  const { monthIncomes, savingsPlan, spendingExpenses }  = useMonthData(periodKey)
+  const { budget } = useBudget(periodKey)
 
   const financialData = useMemo((): FinanceSummaryInput => {
-    const cashflow     = calcCashflow(expenses, incomes, debts, goals, savingsPlan, monthKey)
+    const cashflow     = calcCashflow(expenses, incomes, debts, goals, savingsPlan, range)
     const budgetAmount = budget ? (budget.spendingAmount ?? budget.amount ?? 0) : 0
 
-    // ── Thời gian ──────────────────────────────────────────────────────────────
-    const [yearN, monthN] = monthKey.split('-').map(Number)
-    const daysInMonth     = new Date(yearN, monthN, 0).getDate()
-    const isCurrentMonth  = monthKey === thisMonth()
-    const daysElapsed     = isCurrentMonth
-      ? parseInt(today().split('-')[2], 10)
+    // ── Thời gian — tính từ ngày thực (range), KHÔNG parse periodKey ────────────
+    const daysInMonth    = daysDiff(range.start, range.end) + 1
+    const todayStr       = today()
+    const isCurrentMonth = todayStr >= range.start && todayStr <= range.end
+    const daysElapsed    = isCurrentMonth
+      ? daysDiff(range.start, todayStr) + 1
       : daysInMonth
 
     // ── Chi tiêu ───────────────────────────────────────────────────────────────
@@ -55,7 +61,7 @@ export function useAiSummary(monthKey: string) {
     const totalTransactions = spendingExpenses.length
 
     // ── Danh mục (tất cả, không chỉ top 4) ────────────────────────────────────
-    const allCategories = calcCategorySpending(expenses, monthKey)
+    const allCategories = calcCategorySpending(expenses, range)
       .filter(c => c.amount > 0)
       .map(c => ({
         category:          c.category,
@@ -73,7 +79,6 @@ export function useAiSummary(monthKey: string) {
       ? Math.round((savingsDeposited / savingsTarget) * 100) : 0
 
     // ── Nợ ─────────────────────────────────────────────────────────────────────
-    const todayStr = today()
     // FIX: dùng computeRemaining() (tính lại từ payments — source of truth) thay cho
     // d.paidAmount (field "KHÔNG tin tưởng", có thể stale = 0 → ra nợ gốc thay vì còn lại).
     // Chỉ tính nợ type 'borrow' (tôi đang nợ) — khớp với cách tab Nợ hiển thị "Tôi đang nợ".
@@ -90,9 +95,9 @@ export function useAiSummary(monthKey: string) {
         type:      d.type as string,
       }))
 
-    // ── Month label ────────────────────────────────────────────────────────────
-    const [year, month] = monthKey.split('-')
-    const monthLabel = `tháng ${parseInt(month)}/${year}`
+    // ── Month label — dùng label đã format sẵn từ caller (usePeriod/period-selector),
+    // không tự parse periodKey vì cycleKey không có ngữ nghĩa "tháng X/năm Y" ─────
+    const monthLabel = label
 
     return {
       monthLabel,
@@ -117,7 +122,7 @@ export function useAiSummary(monthKey: string) {
       alertDebts,
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, incomes, debts, goals, savingsPlan, spendingExpenses, budget, monthKey])
+  }, [expenses, incomes, debts, goals, savingsPlan, spendingExpenses, budget, periodKey, range.start, range.end, label])
 
   // ─── TTS helpers ─────────────────────────────────────────────────────────────
 
@@ -149,14 +154,14 @@ export function useAiSummary(monthKey: string) {
 
   const generateSummary = useCallback(async (force = false) => {
     if (!force) {
-      const cached = summaryCache.get(monthKey)
+      const cached = summaryCache.get(periodKey)
       if (cached) {
         setSummary(cached)
         setSummaryStatus('done')
         return
       }
     } else {
-      summaryCache.delete(monthKey)
+      summaryCache.delete(periodKey)
     }
 
     setSummaryStatus('loading')
@@ -178,14 +183,14 @@ export function useAiSummary(monthKey: string) {
         return
       }
 
-      summaryCache.set(monthKey, data.summary)
+      summaryCache.set(periodKey, data.summary)
       setSummary(data.summary)
       setSummaryStatus('done')
     } catch {
       setSummaryError('Lỗi kết nối. Vui lòng thử lại.')
       setSummaryStatus('error')
     }
-  }, [financialData, stopSpeech, monthKey])
+  }, [financialData, stopSpeech, periodKey])
 
   // ─── TTS — Google Cloud Neural2 với fallback browser ─────────────────────────
 
@@ -293,12 +298,12 @@ export function useAiSummary(monthKey: string) {
     }
   }, [])
 
-  // Khôi phục tóm tắt từ cache khi mount lại / đổi tháng → không bị "mất" sau khi quay lại.
+  // Khôi phục tóm tắt từ cache khi mount lại / đổi kỳ → không bị "mất" sau khi quay lại.
   useEffect(() => {
-    const cached = summaryCache.get(monthKey)
+    const cached = summaryCache.get(periodKey)
     setSummary(cached ?? null)
     setSummaryStatus(cached ? 'done' : 'idle')
-  }, [monthKey])
+  }, [periodKey])
 
   const hasTts = true // Google Cloud TTS luôn available khi đã login
 

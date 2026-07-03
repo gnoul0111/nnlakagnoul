@@ -13,7 +13,7 @@ import { AmountInput } from '@/components/ui/amount-input'
 import { MonthPicker } from '@/components/dashboard/month-picker'
 import { useAppend } from '@/hooks/useAppend'
 import { useMonthData } from '@/hooks/useAppData'
-import { useCurrentMonth } from '@/hooks/useCurrentMonth'
+import { usePeriod } from '@/hooks/usePeriod'
 import { useAuthStore } from '@/lib/store/authStore'
 import { useSettingsStore, selectMoneyHidden } from '@/lib/store/settingsStore'
 import { useToast } from '@/hooks/useToast'
@@ -148,7 +148,7 @@ export function IncomeTab() {
   const { append }  = useAppend()
   const toast       = useToast()
 
-  const { currentMonth, goToPrevMonth, goToNextMonth, goToToday, isCurrentMonth } = useCurrentMonth()
+  const { periodKey: currentMonth, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth } = usePeriod()
   const { monthIncomes } = useMonthData(currentMonth)
 
   const [formOpen, setFormOpen]         = useState(false)
@@ -173,7 +173,7 @@ export function IncomeTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <MonthPicker currentMonth={currentMonth} onPrev={goToPrevMonth}
+        <MonthPicker label={label} onPrev={goToPrevMonth}
           onNext={goToNextMonth} onToday={goToToday} isCurrentMonth={isCurrentMonth} />
         <Button size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setFormOpen(true)}>
           Thêm

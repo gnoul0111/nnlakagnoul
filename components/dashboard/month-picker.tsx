@@ -5,7 +5,10 @@ import { formatMonthLabel } from '@/lib/utils/date'
 import { cn } from '@/lib/utils/cn'
 
 interface MonthPickerProps {
-  currentMonth: string         // YYYY-MM
+  /** Label hiển thị sẵn — dùng khi caller đã có usePeriod().label (hỗ trợ kỳ lương) */
+  label?: string
+  /** @deprecated dùng `label` thay — giữ lại để các tab chưa migrate sang usePeriod() không vỡ build */
+  currentMonth?: string         // YYYY-MM
   onPrev: () => void
   onNext: () => void
   onToday: () => void
@@ -14,8 +17,9 @@ interface MonthPickerProps {
 }
 
 export function MonthPicker({
-  currentMonth, onPrev, onNext, onToday, isCurrentMonth, className,
+  label, currentMonth, onPrev, onNext, onToday, isCurrentMonth, className,
 }: MonthPickerProps) {
+  const displayLabel = label ?? (currentMonth ? formatMonthLabel(currentMonth) : '')
   return (
     <div className={cn('flex items-center gap-1', className)}>
       <button
@@ -36,7 +40,7 @@ export function MonthPicker({
             : 'text-primary hover:bg-primary/10',
         )}
       >
-        {formatMonthLabel(currentMonth)}
+        {displayLabel}
       </button>
 
       <button

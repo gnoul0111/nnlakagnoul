@@ -37,24 +37,29 @@ export default function AnalyticsPage() {
 
   const compareData = useCompareData(range)
 
-  // Budget cho tháng hiện tại (analytics chỉ dùng cho month view)
-  const monthKey = range.type === 'month' ? range.start.slice(0, 7) : thisMonth()
+  // Budget/cashflow/AI summary cần 1 periodKey cụ thể — chỉ có ý nghĩa cho
+  // month/cycle view (week/year không map 1-1 vào 1 kỳ ngân sách).
+  // monthKey="YYYY-MM" | cycleKey="YYYY-MM-DD" (= range.start, xem lib/utils/date.ts)
+  const isSinglePeriod = range.type === 'month' || range.type === 'cycle'
+  const monthKey = range.type === 'month' ? range.start.slice(0, 7)
+    : range.type === 'cycle' ? range.start
+    : thisMonth()
   const { budget } = useBudget(monthKey)
   const budgetAmount = budget ? (budget.spendingAmount ?? budget.amount ?? 0) : 0
 
   // Chart data theo period type
   const chartData = useMemo(() => {
     if (range.type === 'week')  return dailyData
-    if (range.type === 'month') return buildWeeklyData(dailyData)
+    if (range.type === 'month' || range.type === 'cycle') return buildWeeklyData(dailyData)
     return buildMonthlyData(expenses, incomes, parseInt(range.start.slice(0, 4)))
   }, [dailyData, range.type, expenses, incomes])
 
-  // Cashflow chỉ cho month view
+  // Cashflow chỉ cho month/cycle view
   const cashflow = useMemo(() => {
-    if (range.type !== 'month') return null
+    if (!isSinglePeriod) return null
     const savingsPlan = savingsPlans[monthKey] ?? null
     return calcCashflow(expenses, incomes, debts, goals, savingsPlan, monthKey)
-  }, [expenses, incomes, debts, goals, savingsPlans, monthKey, range.type])
+  }, [expenses, incomes, debts, goals, savingsPlans, monthKey, isSinglePeriod])
 
   if (isLoading) return <AnalyticsSkeleton />
 
@@ -80,7 +85,7 @@ export default function AnalyticsPage() {
       {/* Bar chart — income vs expense */}
       <IncomeExpenseBarChart data={chartData} periodType={range.type} moneyHidden={moneyHidden} />
 
-      {/* Line chart — daily spending (only for week/month) */}
+      {/* Line chart — daily spending (only for week/month/cycle) */}
       {range.type !== 'year' && (
         <SpendingLineChart data={dailyData} moneyHidden={moneyHidden} />
       )}
@@ -96,9 +101,9 @@ export default function AnalyticsPage() {
         <CashflowCard {...cashflow} moneyHidden={moneyHidden} />
       )}
 
-      {/* AI summary — chỉ hiện ở month view vì cần monthKey cụ thể */}
-      {range.type === 'month' && (
-        <AiSummaryWidget monthKey={monthKey} />
+      {/* AI summary — chỉ hiện ở month/cycle view vì cần 1 periodKey cụ thể */}
+      {isSinglePeriod && (
+        <AiSummaryWidget periodKey={monthKey} range={{ start: range.start, end: range.end }} label={range.label} />
       )}
 
       {/* 6-month trend */}

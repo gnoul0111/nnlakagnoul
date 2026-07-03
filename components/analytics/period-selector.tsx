@@ -6,8 +6,9 @@ import { cn } from '@/lib/utils/cn'
 import {
   today, toLocalDateString, parseLocalDate,
   getWeekRange, prevMonth, nextMonth, thisMonth,
-  formatMonthLabel,
+  formatMonthLabel, getSalaryCycleRange, prevCycle, nextCycle, formatCycleLabel,
 } from '@/lib/utils/date'
+import { useSettingsStore, selectCycleModeEnabled, selectSalaryDay } from '@/lib/store/settingsStore'
 import type { PeriodType, PeriodRange } from '@/hooks/useAnalyticsData'
 
 interface PeriodSelectorProps {
@@ -15,13 +16,14 @@ interface PeriodSelectorProps {
   onChange: (range: PeriodRange) => void
 }
 
-const PERIOD_TABS: { id: PeriodType; label: string }[] = [
+const BASE_TABS: { id: PeriodType; label: string }[] = [
   { id: 'week',  label: 'Tuần'  },
   { id: 'month', label: 'Tháng' },
   { id: 'year',  label: 'Năm'   },
 ]
+const CYCLE_TAB: { id: PeriodType; label: string } = { id: 'cycle', label: 'Kỳ lương' }
 
-function buildRange(type: PeriodType, anchor: string): PeriodRange {
+function buildRange(type: PeriodType, anchor: string, salaryDay: number): PeriodRange {
   if (type === 'week') {
     const { start, end } = getWeekRange(anchor, 'monday')
     return { type, start, end, label: `${start} – ${end}` }
@@ -32,12 +34,16 @@ function buildRange(type: PeriodType, anchor: string): PeriodRange {
     const end    = toLocalDateString(new Date(y, m, 0))
     return { type, start, end, label: formatMonthLabel(anchor.slice(0, 7)) }
   }
+  if (type === 'cycle') {
+    const { start, end } = getSalaryCycleRange(anchor, salaryDay)
+    return { type, start, end, label: formatCycleLabel(start, end) }
+  }
   // year
   const year  = anchor.slice(0, 4)
   return { type, start: `${year}-01-01`, end: `${year}-12-31`, label: `Năm ${year}` }
 }
 
-function shiftAnchor(anchor: string, type: PeriodType, dir: -1 | 1): string {
+function shiftAnchor(anchor: string, type: PeriodType, dir: -1 | 1, salaryDay: number): string {
   if (type === 'week') {
     const d = parseLocalDate(anchor)
     d.setDate(d.getDate() + dir * 7)
@@ -46,40 +52,47 @@ function shiftAnchor(anchor: string, type: PeriodType, dir: -1 | 1): string {
   if (type === 'month') {
     return (dir === -1 ? prevMonth : nextMonth)(anchor.slice(0, 7)) + '-01'
   }
+  if (type === 'cycle') {
+    return (dir === -1 ? prevCycle : nextCycle)(anchor, salaryDay)
+  }
   const y = parseInt(anchor.slice(0, 4)) + dir
   return `${y}-01-01`
 }
 
 export function PeriodSelector({ value, onChange }: PeriodSelectorProps) {
   const [anchor, setAnchor] = useState(today())
+  const cycleModeEnabled = useSettingsStore(selectCycleModeEnabled)
+  const salaryDay        = useSettingsStore(selectSalaryDay)
+  const tabs = cycleModeEnabled ? [...BASE_TABS, CYCLE_TAB] : BASE_TABS
 
   const switchType = (type: PeriodType) => {
-    const newAnchor = today()
+    const newAnchor = type === 'cycle' ? getSalaryCycleRange(today(), salaryDay).cycleKey : today()
     setAnchor(newAnchor)
-    onChange(buildRange(type, newAnchor))
+    onChange(buildRange(type, newAnchor, salaryDay))
   }
 
   const shift = (dir: -1 | 1) => {
-    const newAnchor = shiftAnchor(anchor, value.type, dir)
+    const newAnchor = shiftAnchor(anchor, value.type, dir, salaryDay)
     setAnchor(newAnchor)
-    onChange(buildRange(value.type, newAnchor))
+    onChange(buildRange(value.type, newAnchor, salaryDay))
   }
 
   const goToNow = () => {
-    const newAnchor = today()
+    const newAnchor = value.type === 'cycle' ? getSalaryCycleRange(today(), salaryDay).cycleKey : today()
     setAnchor(newAnchor)
-    onChange(buildRange(value.type, newAnchor))
+    onChange(buildRange(value.type, newAnchor, salaryDay))
   }
 
   const isNow = anchor === today() ||
     (value.type === 'month' && anchor.slice(0, 7) === thisMonth()) ||
+    (value.type === 'cycle' && anchor === getSalaryCycleRange(today(), salaryDay).cycleKey) ||
     (value.type === 'year'  && anchor.slice(0, 4) === String(new Date().getFullYear()))
 
   return (
     <div className="space-y-3">
       {/* Period type tabs */}
       <div className="flex bg-muted rounded-xl p-1">
-        {PERIOD_TABS.map(tab => (
+        {tabs.map(tab => (
           <button key={tab.id} onClick={() => switchType(tab.id)}
             className={cn(
               'flex-1 py-2 rounded-lg text-sm font-medium transition-colors',
