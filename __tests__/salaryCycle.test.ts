@@ -48,6 +48,42 @@ describe('getSalaryCycleRange', () => {
     expect(r.cycleKey).toHaveLength(10)
     expect(r.cycleKey).not.toMatch(/^\d{4}-\d{2}$/)
   })
+
+  // ─── Regression: bug thật phát hiện qua code review sau khi deploy preview ──
+  // Root cause: so sánh `day >= salaryDay` dùng salaryDay THÔ (chưa clamp cho
+  // đúng tháng của anchor). Khi anchor CHÍNH LÀ ngày lương đã bị clamp (vd
+  // salaryDay=31, anchor=28/2 — vì tháng 2 chỉ có 28 ngày), so sánh với số 31
+  // thô luôn ra false → anchor bị coi thuộc kỳ TRƯỚC thay vì bắt đầu kỳ mới.
+  test('anchor CHÍNH LÀ ngày lương đã clamp (28/2 khi salaryDay=31) → phải bắt đầu kỳ MỚI, không thuộc kỳ trước', () => {
+    const r = getSalaryCycleRange('2026-02-28', 31)
+    expect(r.start).toBe('2026-02-28')     // kỳ mới bắt đầu đúng ngày này
+    expect(r.end).toBe('2026-03-30')       // kết thúc trước ngày lương clamp của tháng 3 (31/3 hợp lệ)
+  })
+
+  test('salaryDay=0 (chưa đặt) — không dùng để tính kỳ lương ở tầng UI (guard qua selectIsCycleModeActive), nhưng nếu lỡ gọi trực tiếp thì range là 1/tháng → 1/tháng sau (chồng lấn biết trước, không crash)', () => {
+    const r = getSalaryCycleRange('2026-07-03', 0)
+    expect(r.start).toBe('2026-07-01')
+    expect(r.end).toBe('2026-08-01')
+  })
+})
+
+describe('nextCycle — không được đứng im (bẫy salaryDay bị clamp qua nhiều tháng liên tiếp)', () => {
+  test('salaryDay=31: Jan → Feb → Mar → Apr phải là 4 cycleKey khác nhau', () => {
+    const jan = '2026-01-31'
+    const feb = nextCycle(jan, 31)
+    const mar = nextCycle(feb, 31)
+    const apr = nextCycle(mar, 31)
+    const keys = [jan, feb, mar, apr]
+    expect(new Set(keys).size).toBe(4) // không có key nào lặp lại (đứng im)
+    expect(feb).toBe('2026-02-28') // clamp vì Feb chỉ có 28 ngày (2026 không nhuận)
+    expect(mar).toBe('2026-03-31') // Mar có 31 ngày → về đúng ngày lương thật
+    expect(apr).toBe('2026-04-30') // clamp vì Apr chỉ có 30 ngày
+  })
+
+  test('prevCycle/nextCycle round-trip vẫn đúng quanh tháng bị clamp', () => {
+    const feb = '2026-02-28'
+    expect(prevCycle(nextCycle(feb, 31), 31)).toBe(feb)
+  })
 })
 
 describe('prevCycle / nextCycle', () => {

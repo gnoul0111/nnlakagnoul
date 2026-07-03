@@ -199,6 +199,17 @@ export function startOfYear(year: number): string {
   return `${year}-01-01`
 }
 
+// ─── PeriodLike — chuẩn hoá monthKey/range dùng chung cho budgetCalc.ts + replay.ts ─
+// (nguồn gốc duy nhất — trước đây bị copy-paste trùng ở 2 file, dễ sửa 1 nơi quên nơi kia)
+
+/** monthKey ("YYYY-MM") cho tháng dương lịch, hoặc {start,end} đã resolve cho kỳ lương */
+export type PeriodLike = string | { start: string; end: string }
+
+export function toRange(period: PeriodLike): { start: string; end: string } {
+  if (typeof period === 'string') return { start: startOfMonth(period), end: endOfMonth(period) }
+  return period
+}
+
 /** Ngày cuối năm */
 export function endOfYear(year: number): string {
   return `${year}-12-31`
@@ -240,7 +251,13 @@ export function getSalaryCycleRange(anchorDate: string, salaryDay: number): Cycl
   const anchorYear  = d.getFullYear()
   const anchorMonth = d.getMonth() // 0-based
 
-  const startsInCurrentMonth = day >= salaryDay
+  // So với ngày lương ĐÃ CLAMP cho đúng tháng của anchor — không phải salaryDay thô.
+  // Bẫy đã gặp: nếu so raw salaryDay (vd 31) trong khi tháng anchor chỉ có 28 ngày,
+  // anchor đúng bằng ngày lương thực (28) bị coi là "chưa tới ngày lương" (28 >= 31
+  // = false) → cycleKey tính ra trùng với kỳ trước → nextCycle() bị đứng im, không
+  // bao giờ tiến được sang kỳ mới cho các salaryDay hay bị clamp (29/30/31).
+  const paydayThisMonth = clampDayToMonth(anchorYear, anchorMonth, salaryDay)
+  const startsInCurrentMonth = day >= paydayThisMonth
   const startYear  = startsInCurrentMonth ? anchorYear : (anchorMonth === 0 ? anchorYear - 1 : anchorYear)
   const startMonth = startsInCurrentMonth ? anchorMonth : (anchorMonth === 0 ? 11 : anchorMonth - 1)
 

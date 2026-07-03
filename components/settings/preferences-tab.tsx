@@ -276,8 +276,22 @@ export function PreferencesTab() {
             <p className="text-xs text-muted-foreground mt-0.5">0 = không đặt, 1–31</p>
           </div>
           <input type="number" min={0} max={31} value={settings?.salaryDay ?? 0}
-            onChange={e => user && updateSettings(user.uid, { salaryDay: Math.min(31, Math.max(0, parseInt(e.target.value) || 0)) })}
-            onBlur={e => user && save('salary', () => updateSettings(user.uid, { salaryDay: parseInt(e.target.value) || 0 }))}
+            onChange={e => {
+              if (!user) return
+              const salaryDay = Math.min(31, Math.max(0, parseInt(e.target.value) || 0))
+              // Về 0 = huỷ ngày lương → tự tắt luôn switch, tránh trạng thái
+              // "bật nhưng không có ngày lương hợp lệ" (kỳ lương sẽ tính sai).
+              updateSettings(user.uid, salaryDay === 0
+                ? { salaryDay, cycleModeEnabled: false }
+                : { salaryDay })
+            }}
+            onBlur={e => {
+              if (!user) return
+              const salaryDay = parseInt(e.target.value) || 0
+              save('salary', () => updateSettings(user.uid, salaryDay === 0
+                ? { salaryDay, cycleModeEnabled: false }
+                : { salaryDay }))
+            }}
             className="w-16 h-9 rounded-lg border border-input bg-background text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </Row>

@@ -5,7 +5,7 @@ import {
   today, thisMonth, prevMonth, nextMonth, formatMonthLabel, startOfMonth, endOfMonth,
   getSalaryCycleRange, prevCycle, nextCycle, cycleKeyToRange, formatCycleLabel,
 } from '@/lib/utils/date'
-import { useSettingsStore, selectCycleModeEnabled, selectSalaryDay } from '@/lib/store/settingsStore'
+import { useSettingsStore, selectIsCycleModeActive, selectSalaryDay } from '@/lib/store/settingsStore'
 
 interface UsePeriodReturn {
   /** monthKey ("YYYY-MM") ở chế độ tháng dương lịch, hoặc cycleKey ("YYYY-MM-DD") ở chế độ kỳ lương */
@@ -24,7 +24,7 @@ interface UsePeriodReturn {
 /** Hook quản lý period picker — superset của useCurrentMonth, tự chuyển giữa
  *  tháng dương lịch / kỳ lương theo setting cycleModeEnabled + salaryDay. */
 export function usePeriod(initialKey?: string): UsePeriodReturn {
-  const isCycleMode = useSettingsStore(selectCycleModeEnabled)
+  const isCycleMode = useSettingsStore(selectIsCycleModeActive)
   const salaryDay   = useSettingsStore(selectSalaryDay)
 
   const [periodKey, setPeriodKey] = useState<string>(

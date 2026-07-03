@@ -5,19 +5,9 @@ import type { Debt } from '@/lib/types/debt'
 import type { Goal } from '@/lib/types/goal'
 import type { SavingsPlan } from '@/lib/types/savings'
 import { getBudgetAlertLevel, type BudgetAlertLevel } from '@/lib/types/budget'
-import { endOfMonth } from '@/lib/utils/date'
+import { toRange, type PeriodLike } from '@/lib/utils/date'
 
-// ─── Period helper ────────────────────────────────────────────────────────────
-// monthKey ("YYYY-MM") cho chế độ tháng dương lịch, hoặc {start,end} cho kỳ lương
-// (xem hooks/usePeriod.ts). Normalize về range thực để so sánh trực tiếp trên
-// Expense.date/Income.date — tránh phải fork riêng 1 bộ hàm cho từng chế độ.
-
-export type PeriodLike = string | { start: string; end: string }
-
-function toRange(period: PeriodLike): { start: string; end: string } {
-  if (typeof period === 'string') return { start: `${period}-01`, end: endOfMonth(period) }
-  return period
-}
+export type { PeriodLike }
 
 // ─── Filter helpers ───────────────────────────────────────────────────────────
 
