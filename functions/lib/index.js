@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.groupDeletedNotify = exports.groupMemberJoinedNotify = exports.groupEventNotify = exports.cleanupNotifData = exports.sendTestNotification = exports.notifyNewVersion = exports.budgetAlertOnExpense = exports.calendarEventReminder = exports.debtDueReminder = exports.dailyExpenseReminder = void 0;
+exports.groupDeletedNotify = exports.groupMemberJoinedNotify = exports.groupEventNotify = exports.cleanupNotifData = exports.sendTestNotification = exports.notifyNewVersion = exports.budgetAlertOnExpense = exports.debtDueReminder = exports.dailyExpenseReminder = void 0;
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions"));
 const params_1 = require("firebase-functions/params");
@@ -434,71 +434,6 @@ exports.debtDueReminder = functions
         });
         if (sent) {
             await markAlertSent(user.userId, alertKey);
-        }
-    }));
-    return null;
-});
-// ─── FUNCTION 3: Nhắc sự kiện lịch ───────────────────────────────────────────
-// Chạy mỗi giờ, tính xem user nào có event sắp diễn ra theo eventReminderTypes
-// ─── FUNCTION 3: Nhắc sự kiện lịch ───────────────────────────────────────────
-//
-// Chạy MỖI 15 PHÚT (vấn đề D: tolerance ±30 phút của version cũ có thể miss
-// events rơi vào window 0.5h-0.75h trước event). Với cron 15 phút + tolerance
-// 0.25h (±15 phút) — coverage đầy đủ hơn mà không tốn thêm reads đáng kể.
-exports.calendarEventReminder = functions
-    .region('asia-southeast1')
-    .pubsub.schedule('*/15 * * * *')
-    .timeZone(TZ)
-    .onRun(async () => {
-    const { date, hour, minute } = nowVN();
-    if (minute % 15 !== 0) {
-        functions.logger.info(`[calendarEventReminder] Skip off-schedule minute ${minute}`);
-        return null;
-    }
-    functions.logger.info(`[calendarEventReminder] Running at ${hour}:${minute} on ${date}`);
-    const users = await getNotifUsers();
-    await Promise.allSettled(users.map(async (user) => {
-        var _a;
-        const reminderHours = (_a = user.eventReminderTypes) !== null && _a !== void 0 ? _a : [1, 6, 24];
-        // Lấy events trong 2 ngày tới
-        const tomorrow = new Date(date);
-        tomorrow.setDate(tomorrow.getDate() + 2);
-        const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-        const eventsSnap = await db
-            .collection('work_calendar')
-            .where('userId', '==', user.userId)
-            .where('date', '>=', date)
-            .where('date', '<=', tomorrowStr)
-            .where('reminder', '==', true)
-            .get();
-        if (eventsSnap.empty)
-            return;
-        for (const doc of eventsSnap.docs) {
-            const ev = doc.data();
-            if (!ev.time)
-                continue;
-            // Tính số giờ còn lại đến sự kiện
-            const eventDateTime = new Date(`${ev.date}T${ev.time}:00`);
-            const nowDateTime = new Date(new Date().toLocaleString('en-US', { timeZone: TZ }));
-            const hoursLeft = (eventDateTime.getTime() - nowDateTime.getTime()) / (1000 * 60 * 60);
-            // ±15 phút tolerance (match với cron 15 phút) — vấn đề D
-            const shouldNotify = reminderHours.some(h => Math.abs(hoursLeft - h) <= 0.25);
-            if (!shouldNotify)
-                continue;
-            const hoursLeftRounded = Math.round(hoursLeft);
-            // Dedup: đã gửi cho mốc này chưa (lưu ngay trên event doc để theo lifecycle event)
-            if (ev[`notified_${hoursLeftRounded}h`])
-                continue;
-            const body = hoursLeftRounded <= 1
-                ? `"${ev.title}" diễn ra trong 1 giờ nữa (${ev.time})`
-                : `"${ev.title}" diễn ra sau ${hoursLeftRounded} giờ nữa (${ev.date} ${ev.time})`;
-            // Send-then-mark (vấn đề F): chỉ đánh dấu notified nếu gửi thành công
-            const sent = await sendNotificationToUser(user, '📅 Chi Tiêu — Nhắc sự kiện', body, { type: 'calendar_reminder', eventId: doc.id });
-            if (sent) {
-                await doc.ref.update({
-                    [`notified_${hoursLeftRounded}h`]: firestore_1.Timestamp.now(),
-                });
-            }
         }
     }));
     return null;
