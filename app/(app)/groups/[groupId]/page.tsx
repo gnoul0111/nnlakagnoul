@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, Copy, Check, ArrowLeft, Users, AlertTriangle, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
-import { ConfirmModal } from '@/components/ui/modal'
+import { ConfirmModal, Modal } from '@/components/ui/modal'
+import { CategorySelect } from '@/components/ui/category-select'
 import { GroupEntryModal } from '@/components/groups/group-entry-modal'
 import { GroupManageModal } from '@/components/groups/group-manage-modal'
 import { useAuthStore } from '@/lib/store/authStore'
@@ -19,6 +20,7 @@ import {
   pullAsExpense, pullAsDebt, undoPull, skipEntry, unskipEntry, resyncShare, findLinkedExpense,
 } from '@/lib/services/groupBridge'
 import { shareOf, statusOf, type GroupEntry, type EntryStatus } from '@/lib/types/group'
+import type { CategoryValue } from '@/lib/types/expense'
 import { formatMoney } from '@/lib/utils/currency'
 import { formatDateVN } from '@/lib/utils/date'
 import { cn } from '@/lib/utils/cn'
@@ -52,6 +54,9 @@ export default function GroupDetailPage() {
   const [copied, setCopied] = useState(false)
   const [busyEntry, setBusyEntry] = useState<string | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
+  // Chọn danh mục trước khi kéo khoản nhóm về sổ riêng (mặc định gợi ý 'food')
+  const [pullTarget, setPullTarget] = useState<{ entry: GroupEntry; kind: 'expense' | 'debt' } | null>(null)
+  const [pullCategory, setPullCategory] = useState<CategoryValue>('food')
 
   useEffect(() => {
     if (user && groupId) selectGroup(groupId, user.uid)
@@ -115,6 +120,17 @@ export default function GroupDetailPage() {
     } catch (err) {
       console.error('[group] delete entry failed:', err)
       toast.error('Không xóa được. Thử lại nhé.')
+    }
+  }
+
+  const confirmPull = () => {
+    if (!user || !group || !pullTarget) return
+    const { entry, kind } = pullTarget
+    setPullTarget(null)
+    if (kind === 'expense') {
+      runAction(entry, () => pullAsExpense(user.uid, entry, group.name, pullCategory), 'Đã ghi vào chi tiêu.')
+    } else {
+      runAction(entry, () => pullAsDebt(user.uid, entry, group.name, nameOf(entry.payerUid), pullCategory), 'Đã ghi vào nợ.')
     }
   }
 
@@ -288,11 +304,11 @@ export default function GroupDetailPage() {
                   {/* Hành động theo trạng thái */}
                   {myStatus === 'pending' && (
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" loading={busy} onClick={() => runAction(entry, () => pullAsExpense(user!.uid, entry, group!.name), 'Đã ghi vào chi tiêu.')}>
+                      <Button size="sm" loading={busy} onClick={() => { setPullCategory('food'); setPullTarget({ entry, kind: 'expense' }) }}>
                         Ghi chi tiêu
                       </Button>
                       {!isPayer && (
-                        <Button size="sm" variant="outline" disabled={busy} onClick={() => runAction(entry, () => pullAsDebt(user!.uid, entry, group!.name, nameOf(entry.payerUid)), 'Đã ghi vào nợ.')}>
+                        <Button size="sm" variant="outline" disabled={busy} onClick={() => { setPullCategory('food'); setPullTarget({ entry, kind: 'debt' }) }}>
                           Ghi nợ
                         </Button>
                       )}
@@ -343,6 +359,14 @@ export default function GroupDetailPage() {
           onDeleted={() => { dropGroup(group.id); router.push('/groups') }}
         />
       )}
+
+      <Modal open={!!pullTarget} onClose={() => setPullTarget(null)} variant="center"
+        title={pullTarget?.kind === 'debt' ? 'Ghi nợ — chọn danh mục' : 'Ghi chi tiêu — chọn danh mục'}>
+        <div className="p-4 space-y-4">
+          <CategorySelect value={pullCategory} onChange={setPullCategory} />
+          <Button className="w-full" onClick={confirmPull}>Xác nhận</Button>
+        </div>
+      </Modal>
 
       <ConfirmModal
         open={!!deleteTarget}

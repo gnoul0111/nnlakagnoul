@@ -202,7 +202,7 @@ export function SavingsTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <MonthPicker label={label} onPrev={goToPrevMonth} onNext={goToNextMonth} onToday={goToToday} isCurrentMonth={isCurrentMonth} />
+        <MonthPicker label={label} onPrev={goToPrevMonth} onNext={goToNextMonth} onToday={goToToday} isCurrentMonth={isCurrentMonth} isCycleMode={isCycleMode} />
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setWithdrawOpen(true)} leftIcon={<ArrowDownLeft className="w-3.5 h-3.5" />}>Rút</Button>
           <Button size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setDepositOpen(true)}>Nạp</Button>

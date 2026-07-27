@@ -3,7 +3,7 @@ import { addDebt, deleteDebt } from './debtService'
 import { setEntryStatus } from './groupService'
 import { newDebtId } from '@/lib/utils/id'
 import { shareOf, type GroupEntry } from '@/lib/types/group'
-import type { Expense } from '@/lib/types/expense'
+import type { Expense, CategoryValue } from '@/lib/types/expense'
 
 // ════════════════════════════════════════════════════════════════════════════
 // CẦU NỐI box (nhóm) ↔ sổ riêng (cá nhân).
@@ -13,9 +13,9 @@ import type { Expense } from '@/lib/types/expense'
 // 'done' công khai trên khoản. CÁCH kéo (chi tiêu/nợ) là riêng tư.
 // ════════════════════════════════════════════════════════════════════════════
 
-// Khoản nhóm kéo về mặc định category 'food' (đa số là đi chợ/ăn uống).
-// User có thể sửa lại trong tab Chi tiêu sau.
-const DEFAULT_CATEGORY = 'food' as const
+// Khoản nhóm kéo về mặc định gợi ý category 'food' (đa số là đi chợ/ăn uống),
+// nhưng user chọn lại được ngay lúc kéo (xem CategoryPickerModal ở trang nhóm).
+const DEFAULT_CATEGORY: CategoryValue = 'food'
 
 function entryNote(entry: GroupEntry, groupName: string): string {
   return `[Nhóm] ${entry.note || groupName}`
@@ -27,11 +27,13 @@ export function findLinkedExpense(entryId: string, expenses: Expense[]): Expense
 }
 
 /** Ghi phần của mình thành CHI TIÊU thường. */
-export async function pullAsExpense(uid: string, entry: GroupEntry, groupName: string): Promise<void> {
+export async function pullAsExpense(
+  uid: string, entry: GroupEntry, groupName: string, category: CategoryValue = DEFAULT_CATEGORY,
+): Promise<void> {
   const share = shareOf(entry, uid)
   await addExpense(uid, {
     amount: share,
-    category: DEFAULT_CATEGORY,
+    category,
     date: entry.date,
     note: entryNote(entry, groupName),
     _groupId: entry.groupId,
@@ -48,7 +50,7 @@ export async function pullAsExpense(uid: string, entry: GroupEntry, groupName: s
  * (tiêu dùng tài trợ bằng nợ) vừa theo dõi trả nợ. KHÔNG double count.
  */
 export async function pullAsDebt(
-  uid: string, entry: GroupEntry, groupName: string, payerName: string,
+  uid: string, entry: GroupEntry, groupName: string, payerName: string, category: CategoryValue = DEFAULT_CATEGORY,
 ): Promise<void> {
   const share = shareOf(entry, uid)
   const debtId = newDebtId()
@@ -64,7 +66,7 @@ export async function pullAsDebt(
   })
   await addExpense(uid, {
     amount: share,
-    category: DEFAULT_CATEGORY,
+    category,
     date: entry.date,
     note: entryNote(entry, groupName),
     _debtId: debtId,

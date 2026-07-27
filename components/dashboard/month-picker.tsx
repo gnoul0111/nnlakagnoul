@@ -13,12 +13,16 @@ interface MonthPickerProps {
   onNext: () => void
   onToday: () => void
   isCurrentMonth: boolean
+  /** Kỳ lương không có khái niệm "tương lai chưa có dữ liệu" như tháng dương lịch
+   *  (ngày nhận lương thực tế có thể trễ/sớm hơn ngày setup) → cho phép xem trước kỳ sau. */
+  isCycleMode?: boolean
   className?: string
 }
 
 export function MonthPicker({
-  label, currentMonth, onPrev, onNext, onToday, isCurrentMonth, className,
+  label, currentMonth, onPrev, onNext, onToday, isCurrentMonth, isCycleMode, className,
 }: MonthPickerProps) {
+  const disableNext = isCurrentMonth && !isCycleMode
   const displayLabel = label ?? (currentMonth ? formatMonthLabel(currentMonth) : '')
   return (
     <div className={cn('flex items-center gap-1', className)}>
@@ -45,7 +49,7 @@ export function MonthPicker({
 
       <button
         onClick={onNext}
-        disabled={isCurrentMonth}
+        disabled={disableNext}
         className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
         aria-label="Tháng sau"
       >
