@@ -146,6 +146,7 @@ export default function DashboardPage() {
           onNext={goToNextMonth}
           onToday={goToToday}
           isCurrentMonth={isCurrentMonth}
+          isCycleMode={isCycleMode}
         />
       </div>
 

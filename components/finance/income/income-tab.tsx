@@ -148,7 +148,7 @@ export function IncomeTab() {
   const { append }  = useAppend()
   const toast       = useToast()
 
-  const { periodKey: currentMonth, range, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth } = usePeriod()
+  const { periodKey: currentMonth, range, label, goToPrev: goToPrevMonth, goToNext: goToNextMonth, goToToday, isCurrentPeriod: isCurrentMonth, isCycleMode } = usePeriod()
   const { monthIncomes } = useMonthData(currentMonth, range)
 
   const [formOpen, setFormOpen]         = useState(false)
@@ -174,7 +174,7 @@ export function IncomeTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <MonthPicker label={label} onPrev={goToPrevMonth}
-          onNext={goToNextMonth} onToday={goToToday} isCurrentMonth={isCurrentMonth} />
+          onNext={goToNextMonth} onToday={goToToday} isCurrentMonth={isCurrentMonth} isCycleMode={isCycleMode} />
         <Button size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />} onClick={() => setFormOpen(true)}>
           Thêm
         </Button>
